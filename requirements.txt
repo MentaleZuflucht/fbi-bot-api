@@ -1,0 +1,32 @@
+# FastAPI
+fastapi>=0.116.2
+uvicorn>=0.35.0
+
+# Database
+SQLModel>=0.0.24
+SQLAlchemy>=2.0.43
+alembic>=1.16.5
+asyncpg>=0.30.0
+psycopg>=3.2.10
+psycopg2>=2.9.10
+
+# GraphQL
+strawberry-graphql[fastapi]>=0.282.0
+
+# Authentication & Security
+passlib>=1.7.4
+python-jose>=3.5.0
+python-multipart>=0.0.20
+
+# Environment Variables
+python-dotenv>=1.1.1
+pydantic-settings>=2.10.1
+
+# Email validation
+email-validator>=2.3.0
+
+# Logging
+PyYAML>=6.0.2
+
+# Development
+httpx>=0.28.1
