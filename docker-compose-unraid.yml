@@ -1,0 +1,23 @@
+services:
+  fbi-bot-api:
+    container_name: fbi-bot-api
+    build:
+      context: /mnt/user/appdata/fbi-bot-api
+      dockerfile: Dockerfile
+    env_file:
+      - /mnt/user/appdata/fbi-bot-api/.env
+    environment:
+      - DEBUG=false
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    volumes:
+      - /mnt/user/appdata/fbi-bot-api/logs:/app/logs
+      - /mnt/user/appdata/fbi-bot-api:/usr/src/app
+    networks:
+      br0:
+        ipv4_address: 192.168.0.20
+
+networks:
+  br0:
+    external: true

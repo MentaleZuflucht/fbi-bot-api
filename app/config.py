@@ -11,29 +11,17 @@ class Settings(BaseSettings):
     """
 
     app_name: str = "FBI Bot API"
-    app_version: str = "1.0.0"
-    debug: bool = False
+    app_version: str = "4.2.0"
 
     auth_database_url: str
     discord_database_url: str
 
-    api_key_secret: str
-
-    default_rate_limit_per_hour: int = 300
-    default_rate_limit_per_day: int = 5000
-
-    allowed_origins: str = "http://localhost:3000"
-
+    debug: bool = False
     log_level: str = "INFO"
 
     class Config:
         env_file = ".env"
         case_sensitive = False
-
-    @property
-    def allowed_origins_list(self) -> list[str]:
-        """Convert comma-separated origins to list."""
-        return [origin.strip() for origin in self.allowed_origins.split(",")]
 
 
 class CustomFormatter(logging.Formatter):
@@ -75,9 +63,19 @@ def setup_logging():
             with open(config_file, 'r') as file:
                 config = yaml.safe_load(file.read())
 
-            # Add file paths to handlers
-            config['handlers']['rotating_file']['filename'] = str(log_dir / 'api.log')
-            config['handlers']['error_file']['filename'] = str(log_dir / 'errors.log')
+            # Ensure log files have absolute paths and are writable
+            api_log_path = log_dir / 'api.log'
+            error_log_path = log_dir / 'errors.log'
+
+            # Create log files if they don't exist and set permissions
+            api_log_path.touch(exist_ok=True)
+            error_log_path.touch(exist_ok=True)
+
+            # Update file paths in handlers if they don't already have them
+            if 'filename' not in config['handlers']['rotating_file']:
+                config['handlers']['rotating_file']['filename'] = str(api_log_path)
+            if 'filename' not in config['handlers']['error_file']:
+                config['handlers']['error_file']['filename'] = str(error_log_path)
 
             # Apply the configuration
             logging.config.dictConfig(config)
@@ -94,6 +92,13 @@ def setup_logging():
             )
             logging.warning("logging_config.yaml not found, using basic logging")
 
+    except PermissionError as e:
+        logging.error(f"Permission error setting up log files: {e}")
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s [%(levelname)-8s] %(name)s: %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        )
     except yaml.YAMLError as e:
         logging.error(f"Error parsing logging YAML file: {e}")
         logging.basicConfig(level=logging.INFO)

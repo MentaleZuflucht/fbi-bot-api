@@ -1,5 +1,4 @@
-# Use Python 3.11 slim image for smaller size
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 # Set working directory
 WORKDIR /app
@@ -25,12 +24,13 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy application code
 COPY . .
 
-# Create logs directory
-RUN mkdir -p logs
-
 # Create non-root user for security
-RUN adduser --disabled-password --gecos '' --uid 1000 appuser && \
+RUN adduser --disabled-password --gecos '' --uid 1000 appuser
+
+# Create logs directory and set permissions
+RUN mkdir -p logs && \
     chown -R appuser:appuser /app
+
 USER appuser
 
 # Expose port
