@@ -75,17 +75,31 @@ def setup_logging():
             with open(config_file, 'r') as file:
                 config = yaml.safe_load(file.read())
 
+            # Add file paths to handlers
             config['handlers']['rotating_file']['filename'] = str(log_dir / 'api.log')
             config['handlers']['error_file']['filename'] = str(log_dir / 'errors.log')
 
+            # Apply the configuration
             logging.config.dictConfig(config)
+
+            # Log successful setup
+            logger = logging.getLogger(__name__)
+            logger.info("Logging configuration loaded successfully")
+        else:
+            # Fallback to basic logging if config file doesn't exist
+            logging.basicConfig(
+                level=logging.INFO,
+                format='%(asctime)s [%(levelname)-8s] %(name)s: %(message)s',
+                datefmt='%Y-%m-%d %H:%M:%S'
+            )
+            logging.warning("logging_config.yaml not found, using basic logging")
 
     except yaml.YAMLError as e:
         logging.error(f"Error parsing logging YAML file: {e}")
+        logging.basicConfig(level=logging.INFO)
     except Exception as e:
         logging.error(f"Unexpected error in logging configuration: {e}")
+        logging.basicConfig(level=logging.INFO)
 
 
 settings = Settings()
-
-setup_logging()

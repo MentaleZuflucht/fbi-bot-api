@@ -30,7 +30,6 @@ class ApiKeyType:
     role: UserRoleType
     created_at: datetime
     last_used_at: Optional[datetime]
-    allowed_ips: str  # JSON string of allowed IPs
 
     @strawberry.field
     def usage_stats(
@@ -75,8 +74,7 @@ class ApiKeyType:
             key_prefix=key.key_prefix,
             role=UserRoleType(key.role.value),
             created_at=key.created_at,
-            last_used_at=key.last_used_at,
-            allowed_ips=key.allowed_ips
+            last_used_at=key.last_used_at
         )
 
 

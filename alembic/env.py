@@ -2,11 +2,13 @@ from logging.config import fileConfig
 import os
 from dotenv import load_dotenv
 from sqlmodel import SQLModel
-from sqlalchemy import engine_from_config
+from sqlalchemy import engine_from_config, MetaData
 from sqlalchemy import pool
 from alembic import context
-# Import all models to ensure they're available for autogenerate
-from app.auth import models
+
+# Import ONLY auth models for this Alembic setup
+# We import them directly to avoid importing the entire app
+from app.auth.models import ApiKey, ApiUsage
 
 # Load environment variables from .env file
 load_dotenv()
@@ -34,9 +36,16 @@ if config.config_file_name is not None:
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# add your model's MetaData object here
-# for 'autogenerate' support
-target_metadata = SQLModel.metadata
+# Create metadata that only includes auth models
+# Filter the global SQLModel.metadata to only include our auth tables
+auth_metadata = MetaData()
+
+# Only copy auth-related tables to our filtered metadata
+for table_name, table in SQLModel.metadata.tables.items():
+    if table_name in ('api_keys', 'api_usage'):
+        table.tometadata(auth_metadata)
+
+target_metadata = auth_metadata
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:

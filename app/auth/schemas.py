@@ -7,7 +7,7 @@ representations (e.g., hiding sensitive fields).
 """
 
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional
 from pydantic import BaseModel, Field
 
 from app.auth.models import UserRole
@@ -17,7 +17,6 @@ class ApiKeyCreate(BaseModel):
     """Schema for creating a new API key."""
     name: str = Field(..., max_length=100, description="Human-readable name for the key")
     role: UserRole = Field(default=UserRole.READ, description="Role for the key (admin/read)")
-    allowed_ips: List[str] = Field(..., description="List of allowed IP addresses/CIDR blocks/DNS names")
 
 
 class ApiKeyResponse(BaseModel):
@@ -28,7 +27,6 @@ class ApiKeyResponse(BaseModel):
     role: UserRole
     created_at: datetime
     last_used_at: Optional[datetime]
-    allowed_ips: List[str]  # Will be parsed from JSON
 
     class Config:
         from_attributes = True

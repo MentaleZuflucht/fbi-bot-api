@@ -5,10 +5,12 @@ This module creates the main GraphQL schema that combines all types and resolver
 and sets up the FastAPI GraphQL endpoint with authentication.
 """
 
+import logging
 import strawberry
 from strawberry.fastapi import GraphQLRouter
 from typing import List
-
+from datetime import datetime, timedelta
+from sqlmodel import select, func
 from app.graphql.context import get_graphql_context, GraphQLContext
 from app.graphql.types.auth import (
     ApiKeyType, ApiUsageType, AuthStatsType, ApiKeyUsageStatsType, UserRoleType
@@ -21,8 +23,8 @@ from app.graphql.types.discord import (
 )
 from app.graphql.resolvers.discord import Query as DiscordQuery
 from app.auth.models import ApiKey, ApiUsage
-from sqlmodel import select, func
-from datetime import datetime, timedelta
+
+logger = logging.getLogger(__name__)
 
 
 @strawberry.type
@@ -38,9 +40,11 @@ class Query(DiscordQuery):
     def hello(self, info: strawberry.Info[GraphQLContext, None]) -> str:
         """Simple hello query for testing."""
         if not info.context.is_authenticated:
+            logger.debug("Unauthenticated hello query")
             return "Hello! Please authenticate to access Discord data."
 
         user_name = info.context.api_key.name if info.context.api_key else "Unknown"
+        logger.debug(f"GraphQL hello query from {user_name}")
         return f"Hello {user_name}! You have access to the Discord data API."
 
     # Auth-related queries (admin only)
@@ -151,7 +155,6 @@ class Query(DiscordQuery):
 # Create the GraphQL schema
 schema = strawberry.Schema(
     query=Query,
-    # Add more types to ensure they're included in the schema
     types=[
         # Auth types
         ApiKeyType, ApiUsageType, AuthStatsType, ApiKeyUsageStatsType, UserRoleType,

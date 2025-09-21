@@ -5,6 +5,7 @@ These resolvers handle queries for Discord user data, messages, voice sessions,
 and other Discord-related information with proper authentication.
 """
 
+import logging
 from typing import Optional, List
 from datetime import datetime, timedelta
 import strawberry
@@ -20,6 +21,8 @@ from app.discord.models import (
     PresenceStatusLog, CustomStatus, UserNameHistory
 )
 
+logger = logging.getLogger(__name__)
+
 
 @strawberry.type
 class Query:
@@ -33,13 +36,25 @@ class Query:
     ) -> Optional[UserType]:
         """Get a specific Discord user by ID."""
         if not info.context.is_authenticated:
+            logger.warning("Unauthenticated GraphQL user query attempt")
             raise Exception("Authentication required")
 
-        user = info.context.discord_db.exec(
-            select(User).where(User.user_id == int(user_id))
-        ).first()
+        try:
+            logger.debug(f"GraphQL query: user(user_id={user_id}) by {info.context.api_key.name}")
 
-        return UserType.from_model(user) if user else None
+            user = info.context.discord_db.exec(
+                select(User).where(User.user_id == int(user_id))
+            ).first()
+
+            if user:
+                logger.debug(f"Found user {user_id}")
+            else:
+                logger.debug(f"User {user_id} not found")
+
+            return UserType.from_model(user) if user else None
+        except Exception as e:
+            logger.error(f"Error in GraphQL user query: {e}", exc_info=True)
+            raise
 
     @strawberry.field
     def users(

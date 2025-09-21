@@ -9,7 +9,7 @@ This script allows you to:
 - View usage statistics
 
 Usage:
-    python scripts/manage_api_keys.py create "John's Key" read "192.168.1.100,john.example.com"
+    python scripts/manage_api_keys.py create "John's Key" read
     python scripts/manage_api_keys.py list
     python scripts/manage_api_keys.py revoke 1
     python scripts/manage_api_keys.py stats 1
@@ -17,7 +17,6 @@ Usage:
 
 import asyncio
 import sys
-import json
 from pathlib import Path
 
 # Add the project root to the path so we can import our modules
@@ -45,14 +44,8 @@ class ApiKeyManager:
         if hasattr(self, 'db'):
             self.db.close()
 
-    async def create_key(self, name: str, role: str, allowed_ips_str: str):
+    async def create_key(self, name: str, role: str):
         """Create a new API key."""
-        # Parse allowed IPs
-        allowed_ips = [ip.strip() for ip in allowed_ips_str.split(',') if ip.strip()]
-
-        if not allowed_ips:
-            print("❌ Error: You must provide at least one allowed IP address")
-            return
 
         if role not in ['admin', 'read']:
             print("❌ Error: Role must be 'admin' or 'read'")
@@ -63,14 +56,12 @@ class ApiKeyManager:
             api_key, plain_key = await AuthService.create_api_key(
                 name=name,
                 role=role,
-                allowed_ips=allowed_ips,
                 db=self.db
             )
 
             print("✅ API Key Created Successfully!")
             print(f"📝 Name: {name}")
             print(f"🔑 Role: {role}")
-            print(f"🌐 Allowed IPs: {', '.join(allowed_ips)}")
             print(f"🔒 Key ID: {api_key.id}")
             print(f"📅 Created: {api_key.created_at}")
             print()
@@ -165,10 +156,6 @@ class ApiKeyManager:
             print(f"   Created: {key.created_at}")
             print(f"   Last Used: {key.last_used_at or 'Never'}")
 
-            # Show allowed IPs
-            allowed_ips = json.loads(key.allowed_ips)
-            print(f"   Allowed IPs: {', '.join(allowed_ips)}")
-
         except Exception as e:
             print(f"❌ Error getting stats: {str(e)}")
 
@@ -178,21 +165,21 @@ class ApiKeyManager:
         print("=" * 40)
         print()
         print("Commands:")
-        print("  create <name> <role> <allowed_ips>  Create a new API key")
-        print("  list                                List all API keys")
-        print("  revoke <key_id>                     Revoke an API key")
-        print("  stats <key_id>                      Show usage statistics")
-        print("  help                                Show this help")
+        print("  create <name> <role>      Create a new API key")
+        print("  list                      List all API keys")
+        print("  revoke <key_id>           Revoke an API key")
+        print("  stats <key_id>            Show usage statistics")
+        print("  help                      Show this help")
         print()
         print("Examples:")
-        print('  python scripts/manage_api_keys.py create "John\'s Key" read "192.168.1.100,john.example.com"')
+        print('  python scripts/manage_api_keys.py create "John\'s Key" read')
         print("  python scripts/manage_api_keys.py list")
         print("  python scripts/manage_api_keys.py revoke 1")
         print("  python scripts/manage_api_keys.py stats 1")
         print()
         print("Roles:")
-        print("  admin  - Full access (you)")
-        print("  read   - Read-only access (friends)")
+        print("  admin  - Full access")
+        print("  read   - Read-only access")
 
 
 async def main():
@@ -206,13 +193,13 @@ async def main():
 
     try:
         if command == "create":
-            if len(sys.argv) != 5:
-                print("❌ Usage: create <name> <role> <allowed_ips>")
-                print('   Example: create "John\'s Key" read "192.168.1.100,john.example.com"')
+            if len(sys.argv) != 4:
+                print("❌ Usage: create <name> <role>")
+                print('   Example: create "John\'s Key" read')
                 return
 
-            name, role, allowed_ips = sys.argv[2], sys.argv[3], sys.argv[4]
-            await manager.create_key(name, role, allowed_ips)
+            name, role = sys.argv[2], sys.argv[3]
+            await manager.create_key(name, role)
 
         elif command == "list":
             manager.list_keys()

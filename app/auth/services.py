@@ -6,9 +6,8 @@ API key management, rate limiting, and audit logging.
 """
 import logging
 from datetime import datetime, timezone
-from typing import Optional, List, Dict, Any
+from typing import Optional, Dict, Any
 from sqlmodel import Session, select
-import json
 
 from app.auth.models import ApiKey, ApiUsage
 
@@ -31,33 +30,37 @@ class AuthService:
         Returns:
             ApiKey if valid, None otherwise
         """
-        # Hash the provided key
-        key_hash = ApiKey.hash_key(api_key)
+        try:
+            # Hash the provided key
+            key_hash = ApiKey.hash_key(api_key)
 
-        # Find the API key in database
-        db_api_key = db.exec(
-            select(ApiKey)
-            .where(ApiKey.key_hash == key_hash)
-        ).first()
+            # Find the API key in database
+            db_api_key = db.exec(
+                select(ApiKey)
+                .where(ApiKey.key_hash == key_hash)
+            ).first()
 
-        if not db_api_key:
-            logger.warning(f"Invalid API key attempt: {api_key[:20]}...")
+            if not db_api_key:
+                logger.warning(f"Invalid API key attempt: {api_key[:20]}...")
+                return None
+
+            # Update last used timestamp
+            db_api_key.last_used_at = datetime.now(timezone.utc)
+            db.add(db_api_key)
+            db.commit()
+
+            # Return the API key
+            logger.debug(f"Successfully authenticated API key: {db_api_key.name} (role: {db_api_key.role})")
+            return db_api_key
+
+        except Exception as e:
+            logger.error(f"Error during API key authentication: {e}", exc_info=True)
             return None
-
-        # Update last used timestamp
-        db_api_key.last_used_at = datetime.now(timezone.utc)
-        db.add(db_api_key)
-        db.commit()
-
-        # Return the API key
-        logger.debug(f"Successfully authenticated API key: {db_api_key.name}")
-        return db_api_key
 
     @staticmethod
     async def create_api_key(
         name: str,
         role: str,
-        allowed_ips: List[str],
         db: Session
     ) -> tuple[ApiKey, str]:
         """
@@ -66,7 +69,6 @@ class AuthService:
         Args:
             name: Human-readable name for the key
             role: Role for the key (admin/read)
-            allowed_ips: List of allowed IP addresses/CIDR blocks/DNS names
             db: Database session
 
         Returns:
@@ -81,8 +83,7 @@ class AuthService:
             key_hash=key_hash,
             key_prefix=key_prefix,
             name=name,
-            role=role,
-            allowed_ips=json.dumps(allowed_ips)
+            role=role
         )
 
         db.add(db_api_key)
@@ -90,7 +91,7 @@ class AuthService:
         db.refresh(db_api_key)
 
         # Log the key creation
-        logger.info(f"Created API key '{name}' with role '{role}'")
+        logger.info(f"Created API key '{name}' with role '{role}' (ID: {db_api_key.id})")
 
         return db_api_key, api_key_plain
 

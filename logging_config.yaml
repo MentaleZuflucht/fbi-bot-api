@@ -3,7 +3,7 @@ disable_existing_loggers: False
 
 formatters:
   basic:
-    (): config.CustomFormatter
+    (): app.config.CustomFormatter
     format: '{asctime} [{levelname:<8}] {name}: {message}'
     datefmt: '%Y-%m-%d %H:%M:%S'
     style: '{'
@@ -50,11 +50,22 @@ loggers:
     handlers: [rotating_file, error_file, console]
     propagate: no
     
+  app.discord:
+    level: INFO
+    handlers: [rotating_file, error_file, console]
+    propagate: no
+    
   scripts:
     level: INFO
     handlers: [console]
     propagate: no
     
-  root:
+  uvicorn:
     level: INFO
-    handlers: [rotating_file, error_file, console]
+    handlers: [rotating_file, console]
+    propagate: no
+    
+  uvicorn.access:
+    level: INFO
+    handlers: [rotating_file, console]
+    propagate: no

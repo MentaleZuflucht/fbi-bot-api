@@ -24,7 +24,6 @@ class ApiKey(SQLModel, table=True):
     - The token (hashed for security)
     - Role (admin/read permissions)
     - Name (so you know which friend this belongs to)
-    - IP whitelist (security)
     - Basic tracking (created/last used)
     """
     __tablename__ = "api_keys"
@@ -53,11 +52,6 @@ class ApiKey(SQLModel, table=True):
     )
 
     role: UserRole = Field(default=UserRole.READ, description="Access level (admin/read)")
-
-    allowed_ips: str = Field(
-        max_length=1000,
-        description="JSON array of allowed IP addresses/CIDR blocks/DNS names"
-    )
 
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
