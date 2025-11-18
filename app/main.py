@@ -12,7 +12,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 import uvicorn
 from app.config import settings, setup_logging
-from app.auth.database import create_auth_tables
+from app.auth.database import create_auth_tables, init_default_admin_key
+from app.auth.routes import router as admin_router
 from app.graphql.schema import graphql_app
 
 setup_logging()
@@ -32,6 +33,9 @@ async def lifespan(app: FastAPI):
     try:
         create_auth_tables()
         logger.info("Auth database tables ready")
+
+        init_default_admin_key()
+
     except Exception as e:
         logger.error(f"Auth database setup failed: {e}", exc_info=True)
         raise
@@ -85,7 +89,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["POST"],
+    allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["*"],
 )
 
@@ -128,6 +132,8 @@ app.include_router(
     prefix="/graphql",
     tags=["GraphQL"]
 )
+
+app.include_router(admin_router)
 
 
 @app.get("/", tags=["Root"])

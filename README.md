@@ -172,18 +172,24 @@ docker-compose up -d
 # Create venv
 python3 -m venv .venv
 
-# Activate venv
+# Activate venv (Windows)
 .venv\Scripts\activate
+# Or on Linux/Mac:
+# source .venv/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt
 
-# Run database migrations
-alembic upgrade head
-
-# Start the API
+# Start the API (DB tables auto-created on first run)
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+# Check logs for your initial admin API key!
 ```
+
+**Database Initialization:**
+- Tables are created automatically on startup
+- Initial admin key is generated on first run
+- No manual migrations needed (Alembic is optional)
 
 ## 📚 API Endpoints
 
@@ -195,43 +201,55 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 ## 🔧 API Key Management
 
-### Create API Key (Admin)
+### First-Time Setup
+
+On first startup, the API automatically creates an **initial admin key** and logs it:
+
+```
+🚨 IMPORTANT: Save this key immediately - it will not be shown again!
+================================================================================
+API KEY: sk_live_abc123...
+================================================================================
+```
+
+**Check your Docker logs:**
 ```bash
-python scripts/manage_api_keys.py create "My App" read
+docker logs fbi-bot-api | grep "API KEY:"
 ```
 
-### List API Keys (Admin)
-```graphql
-query AdminKeys {
-  apiKeys {
-    id
-    name
-    keyPrefix
-    role
-    createdAt
-    lastUsedAt
-  }
+This admin key lets you create additional keys for your friends.
+
+### Creating Keys for Friends
+
+Use the admin REST API to create new keys:
+
+```bash
+curl -X POST http://your-api:8000/admin/api-keys/ \
+  -H "Authorization: Bearer YOUR_ADMIN_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "John'\''s Key", "role": "read"}'
+```
+
+Response includes the new API key (save it!):
+```json
+{
+  "id": 2,
+  "name": "John's Key",
+  "api_key": "sk_live_xyz789...",
+  "role": "read"
 }
 ```
 
-### View Usage Statistics (Admin)
-```graphql
-query Usage {
-  apiUsage(limit: 50, days: 7) {
-    timestamp
-    endpoint
-    method
-    responseStatus
-    apiKeyName
-  }
-  authStats {
-    totalApiKeys
-    adminKeys
-    readKeys
-    totalRequestsToday
-  }
-}
-```
+### Admin REST Endpoints
+
+All require an admin API key:
+
+- **POST** `/admin/api-keys/` - Create new API key
+- **GET** `/admin/api-keys/` - List all API keys
+- **DELETE** `/admin/api-keys/{key_id}` - Revoke an API key
+- **GET** `/admin/api-keys/{key_id}/stats?days=7` - View usage statistics
+
+See `/docs` for full interactive documentation.
 
 ## 🔍 GraphQL Schema
 
