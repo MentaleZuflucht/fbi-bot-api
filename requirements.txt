@@ -5,10 +5,8 @@ uvicorn>=0.35.0
 # Database
 SQLModel>=0.0.24
 SQLAlchemy>=2.0.43
-alembic>=1.16.5
 asyncpg>=0.30.0
 psycopg>=3.2.10
-psycopg2>=2.9.10
 
 # GraphQL
 strawberry-graphql[fastapi]>=0.282.0
