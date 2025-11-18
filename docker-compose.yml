@@ -3,7 +3,8 @@ services:
     container_name: fbi-bot-api
     restart: unless-stopped
 
-    image: ghcr.io/zockerei/fbi-bot-api:main
+    image: ghcr.io/mentalezuflucht/fbi-bot-api:main
+    pull_policy: always
 
     environment:
       - AUTH_DATABASE_URL=${AUTH_DATABASE_URL}
