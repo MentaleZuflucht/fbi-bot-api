@@ -1,26 +1,16 @@
 # FBI Bot API - Discord Data Analytics GraphQL API
 
-A powerful GraphQL API for accessing Discord server analytics data collected by your FBI Bot. Built with FastAPI and Strawberry GraphQL, this API provides flexible access to user activity, messages, voice sessions, and comprehensive server statistics.
+A GraphQL API for accessing Discord server analytics data collected by the FBI Bot. Built with FastAPI and Strawberry GraphQL, this API provides flexible access to user activity, messages, voice sessions, and comprehensive server statistics.
 
-## 🚀 Features
-
-- **GraphQL API** - Flexible queries with GraphiQL interface
-- **Discord Analytics** - User activity, messages, voice sessions, presence tracking
-- **Authentication** - API key-based authentication with role-based access
-- **Admin Dashboard** - API key management and usage statistics
-- **Real-time Data** - Live Discord activity tracking
-- **Comprehensive Stats** - User, channel, and server-wide analytics
-
-## 🛠 Tech Stack
+## Tech Stack
 
 - **FastAPI** - Modern, fast web framework
 - **Strawberry GraphQL** - Python GraphQL library
 - **SQLModel** - SQL database ORM with type safety
 - **PostgreSQL** - Primary database for Discord data
-- **Alembic** - Database migrations
-- **Docker** - Containerized deployment
+- **Docker** - Containerized deployment and auto updates
 
-## 📊 What Data Can You Query?
+## What Data Can You Query?
 
 ### User Data
 - **Messages** - Message activity with attachments, embeds, character counts
@@ -139,18 +129,6 @@ query UserActivity($userId: String!) {
 }
 ```
 
-### Channel Rankings
-```graphql
-query ChannelStats {
-  channelStats(limit: 10, days: 7) {
-    channelId
-    totalMessages
-    uniqueUsers
-    mostActiveUserId
-  }
-}
-```
-
 ## 🏃‍♂️ Running the API
 
 ### Environment Variables
@@ -158,14 +136,17 @@ Create a `.env` file:
 ```env
 AUTH_DATABASE_URL=postgresql://user:password@localhost/fbi_auth
 DISCORD_DATABASE_URL=postgresql://user:password@localhost/discord_data
-DEBUG=false
-LOG_LEVEL=INFO
+API_IP=192.168.0.xxx
 ```
 
-### Docker (Recommended but limited to unraid)
-```bash
-docker-compose up -d
-```
+### Docker with Watchtower (Automated Updates)
+The project is configured for automatic deployment:
+
+1. **Push to GitHub** - Code pushed to `main` branch
+2. **GitHub Actions** - Automatically builds Docker image and pushes to GHCR
+3. **Watchtower (needs setup)** - Detects new image and updates container automatically
+
+The GitHub Actions workflow (`.github/workflows/docker-build.yml`) handles building and pushing to `ghcr.io/mentalezuflucht/fbi-bot-api:main`
 
 ### Local Development (with venv)
 ```bash
@@ -189,7 +170,6 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 **Database Initialization:**
 - Tables are created automatically on startup
 - Initial admin key is generated on first run
-- No manual migrations needed (Alembic is optional)
 
 ## 📚 API Endpoints
 
@@ -206,10 +186,9 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 On first startup, the API automatically creates an **initial admin key** and logs it:
 
 ```
-🚨 IMPORTANT: Save this key immediately - it will not be shown again!
-================================================================================
+==================================================================
 API KEY: sk_live_abc123...
-================================================================================
+==================================================================
 ```
 
 **Check your Docker logs:**
@@ -219,7 +198,7 @@ docker logs fbi-bot-api | grep "API KEY:"
 
 This admin key lets you create additional keys for your friends.
 
-### Creating Keys for Friends
+### Creating Keys for Users
 
 Use the admin REST API to create new keys:
 
@@ -250,43 +229,3 @@ All require an admin API key:
 - **GET** `/admin/api-keys/{key_id}/stats?days=7` - View usage statistics
 
 See `/docs` for full interactive documentation.
-
-## 🔍 GraphQL Schema
-
-The API provides comprehensive types for:
-
-### Core Types
-- `UserType` - Discord user with activity methods
-- `MessageActivityType` - Message data with metadata
-- `VoiceSessionType` - Voice channel sessions
-- `ActivityLogType` - User activities (games, streaming, etc.)
-- `PresenceStatusLogType` - Online status tracking
-- `CustomStatusType` - Custom status messages
-
-### Statistics Types
-- `UserStatsType` - Comprehensive user analytics
-- `ChannelStatsType` - Channel-specific statistics
-- `ServerStatsType` - Server-wide analytics
-
-### Authentication Types
-- `ApiKeyType` - API key information
-- `ApiUsageType` - Usage tracking data
-- `AuthStatsType` - Authentication statistics
-
-## 🚨 Error Handling
-
-The API returns standard GraphQL errors:
-
-```json
-{
-  "errors": [
-    {
-      "message": "Authentication required",
-      "path": ["user"],
-      "extensions": {
-        "code": "UNAUTHENTICATED"
-      }
-    }
-  ]
-}
-```
