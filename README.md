@@ -173,10 +173,9 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 ## 📚 API Endpoints
 
-- **GraphQL**: `POST /graphql` - Main GraphQL endpoint
+- **GraphQL**: `POST /graphql` - Main GraphQL endpoint (queries, mutations, admin)
 - **GraphiQL**: `GET /graphql` - Interactive GraphQL explorer (browser)
 - **Health**: `GET /health` - API health check
-- **Docs**: `GET /docs` - OpenAPI documentation
 - **Root**: `GET /` - API information
 
 ## 🔧 API Key Management
@@ -196,36 +195,52 @@ API KEY: sk_live_abc123...
 docker logs fbi-bot-api | grep "API KEY:"
 ```
 
-This admin key lets you create additional keys for your friends.
+This admin key lets you create additional keys via GraphQL.
 
-### Creating Keys for Users
+### Admin GraphQL Mutations
 
-Use the admin REST API to create new keys:
+All admin operations require an admin API key and are performed through the GraphQL endpoint at `/graphql`.
 
-```bash
-curl -X POST http://your-api:8000/admin/api-keys/ \
-  -H "Authorization: Bearer YOUR_ADMIN_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"name": "John'\''s Key", "role": "read"}'
-```
+#### Create a new API key
 
-Response includes the new API key (save it!):
-```json
-{
-  "id": 2,
-  "name": "John's Key",
-  "api_key": "sk_live_xyz789...",
-  "role": "read"
+The full plaintext key is returned **exactly once** — save it immediately.
+
+```graphql
+mutation CreateApiKey {
+  createApiKey(name: "John's Key", role: READ) {
+    id
+    name
+    keyPrefix
+    role
+    createdAt
+    apiKey
+  }
 }
 ```
 
-### Admin REST Endpoints
+#### List all API keys
 
-All require an admin API key:
+```graphql
+query ApiKeys {
+  apiKeys {
+    id
+    name
+    keyPrefix
+    role
+    createdAt
+    lastUsedAt
+  }
+}
+```
 
-- **POST** `/admin/api-keys/` - Create new API key
-- **GET** `/admin/api-keys/` - List all API keys
-- **DELETE** `/admin/api-keys/{key_id}` - Revoke an API key
-- **GET** `/admin/api-keys/{key_id}/stats?days=7` - View usage statistics
 
-See `/docs` for full interactive documentation.
+
+#### Revoke a key
+
+```graphql
+mutation RevokeApiKey {
+  revokeApiKey(keyId: 2)
+}
+```
+
+> You cannot revoke the key you are currently using.

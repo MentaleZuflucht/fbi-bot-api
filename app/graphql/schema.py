@@ -184,6 +184,33 @@ class Mutation:
             api_key=plain_key
         )
 
+    @strawberry.mutation
+    async def revoke_api_key(
+        self,
+        info: strawberry.Info[GraphQLContext, None],
+        key_id: int
+    ) -> bool:
+        """Permanently delete an API key (admin only). Cannot revoke your own key."""
+        if not info.context.is_admin:
+            raise Exception("Admin access required")
+
+        if info.context.api_key.id == key_id:
+            raise Exception("Cannot revoke your own API key")
+
+        key = info.context.auth_db.exec(
+            select(ApiKey).where(ApiKey.id == key_id)
+        ).first()
+
+        if not key:
+            raise Exception(f"API key with ID {key_id} not found")
+
+        revoked = await AuthService.revoke_api_key(key_id, info.context.auth_db)
+
+        if revoked:
+            logger.info(f"Admin '{info.context.api_key.name}' revoked API key '{key.name}' (ID: {key_id}) via GraphQL")
+
+        return revoked
+
 
 # Create the GraphQL schema
 schema = strawberry.Schema(

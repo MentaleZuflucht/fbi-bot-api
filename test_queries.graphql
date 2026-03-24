@@ -525,3 +525,8 @@ query AuthStats {
     totalRequestsToday
   }
 }
+
+# Permanently revoke an API key — replace 1 with the target key ID
+mutation RevokeApiKey {
+  revokeApiKey(keyId: 1)
+}

@@ -13,7 +13,6 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 import uvicorn
 from app.config import settings, setup_logging
 from app.auth.database import create_auth_tables, init_default_admin_key
-from app.auth.routes import router as admin_router
 from app.graphql.schema import graphql_app
 
 setup_logging()
@@ -59,26 +58,22 @@ app = FastAPI(
 
     ## Authentication
 
-    All GraphQL queries require authentication using API keys:
+    All requests require authentication using API keys:
 
     ```
     Authorization: Bearer sk_live_your_api_key_here
     ```
 
-    ## GraphQL Endpoint
+    ## Endpoint
 
-    - **GraphQL**: `/graphql` - Flexible GraphQL queries and mutations
-    - **GraphiQL**: `/graphql` (in browser) - Interactive GraphQL explorer
+    - **GraphQL**: `/graphql` — queries, mutations, and admin operations
+    - **GraphiQL**: `/graphql` (in browser) — interactive schema explorer
 
     ## Getting Started
 
     1. Contact the admin for an API key
     2. Visit `/graphql` in your browser to explore the schema
     3. Use any GraphQL client to query Discord data
-
-    query TestAuth {
-        hello
-    }
     """,
     lifespan=lifespan,
     docs_url="/docs",
@@ -89,7 +84,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "DELETE"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
@@ -132,8 +127,6 @@ app.include_router(
     prefix="/graphql",
     tags=["GraphQL"]
 )
-
-app.include_router(admin_router)
 
 
 @app.get("/", tags=["Root"])
