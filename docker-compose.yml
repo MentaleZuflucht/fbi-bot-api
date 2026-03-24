@@ -10,6 +10,8 @@ services:
       - AUTH_DATABASE_URL=${AUTH_DATABASE_URL}
       - DISCORD_DATABASE_URL=${DISCORD_DATABASE_URL}
       - DEBUG=false
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - FRONTEND_PASSWORD=${FRONTEND_PASSWORD}
 
     volumes:
       - ./logs:/app/logs
