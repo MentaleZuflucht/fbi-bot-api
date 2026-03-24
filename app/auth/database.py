@@ -58,8 +58,8 @@ def create_auth_tables():
     """
     try:
         logger.info("Creating auth database tables...")
-        from app.auth.models import SQLModel
-        SQLModel.metadata.create_all(bind=auth_engine)
+        from app.auth.models import ApiKey, ApiUsage
+        ApiKey.metadata.create_all(bind=auth_engine, tables=[ApiKey.__table__, ApiUsage.__table__])
         logger.info("Auth database tables created successfully")
     except Exception as e:
         logger.error(f"Failed to create auth database tables: {e}", exc_info=True)
