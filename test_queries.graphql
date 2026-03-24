@@ -1,0 +1,527 @@
+# ============================================================
+# FBI Bot API - GraphQL Test Queries
+# Endpoint: POST http://localhost:8000/graphql
+# Auth header: Authorization: Bearer <your-api-key>
+# ============================================================
+
+
+# ── 1. HEALTH / CONNECTIVITY ─────────────────────────────────
+
+# No auth required — useful as a basic connectivity check
+query Hello {
+  hello
+}
+
+
+# ── 2. CURRENT API KEY ───────────────────────────────────────
+
+# Who am I? Returns info about the key used in the request
+query Me {
+  me {
+    id
+    name
+    keyPrefix
+    role
+    createdAt
+    lastUsedAt
+  }
+}
+
+
+# ── 3. USERS ─────────────────────────────────────────────────
+
+# List the 10 most recently seen users
+query ListUsers {
+  users(limit: 10, offset: 0) {
+    userId
+    firstSeen
+    currentName {
+      username
+      displayName
+      globalName
+    }
+  }
+}
+
+# Full user profile — replace USER_ID with a real Discord snowflake
+query GetUser {
+  user(userId: "USER_ID") {
+    userId
+    firstSeen
+    currentName {
+      username
+      displayName
+      globalName
+      effectiveFrom
+    }
+    nameHistory(limit: 5) {
+      username
+      displayName
+      globalName
+      effectiveFrom
+      effectiveUntil
+    }
+    messageCount
+    stats {
+      totalMessages
+      totalVoiceTimeMinutes
+      totalActivities
+      mostActiveHour
+      favoriteActivity
+      mostUsedChannel
+    }
+  }
+}
+
+# Stats for a specific user over the last 30 days
+query UserStats30Days {
+  user(userId: "USER_ID") {
+    userId
+    currentName {
+      username
+    }
+    stats(days: 30) {
+      totalMessages
+      totalVoiceTimeMinutes
+      totalActivities
+      mostActiveHour
+      favoriteActivity
+      mostUsedChannel
+    }
+  }
+}
+
+# Search users by name (min 2 characters)
+query SearchUsers {
+  searchUsers(query: "some", limit: 10) {
+    userId
+    firstSeen
+    currentName {
+      username
+      displayName
+    }
+  }
+}
+
+# List users with a name search filter
+query ListUsersSearch {
+  users(limit: 20, search: "some") {
+    userId
+    currentName {
+      username
+      displayName
+    }
+  }
+}
+
+
+# ── 4. MESSAGES ──────────────────────────────────────────────
+
+# Latest 20 messages across the server
+query LatestMessages {
+  messages(limit: 20) {
+    messageId
+    userId
+    channelId
+    messageType
+    hasAttachments
+    hasEmbeds
+    characterCount
+    sentAt
+  }
+}
+
+# Messages from a specific user in the last 7 days
+query UserMessages {
+  messages(limit: 50, userId: "USER_ID", days: 7) {
+    messageId
+    channelId
+    messageType
+    hasAttachments
+    characterCount
+    sentAt
+  }
+}
+
+# Messages in a specific channel — replace CHANNEL_ID
+query ChannelMessages {
+  messages(limit: 30, channelId: "CHANNEL_ID") {
+    messageId
+    userId
+    messageType
+    sentAt
+  }
+}
+
+# Only DEFAULT message types
+query DefaultMessages {
+  messages(limit: 25, messageType: DEFAULT) {
+    messageId
+    userId
+    channelId
+    characterCount
+    sentAt
+  }
+}
+
+# User's messages via nested resolver
+query UserMessagesNested {
+  user(userId: "USER_ID") {
+    userId
+    messages(limit: 10, days: 30) {
+      messageId
+      channelId
+      messageType
+      sentAt
+    }
+  }
+}
+
+
+# ── 5. VOICE SESSIONS ────────────────────────────────────────
+
+# Latest 10 voice sessions
+query LatestVoiceSessions {
+  voiceSessions(limit: 10) {
+    id
+    userId
+    channelId
+    joinedAt
+    leftAt
+    durationMinutes
+    isOngoing
+  }
+}
+
+# Currently active voice sessions
+query OngoingVoiceSessions {
+  voiceSessions(limit: 20, ongoingOnly: true) {
+    id
+    userId
+    channelId
+    joinedAt
+    isOngoing
+  }
+}
+
+# Voice sessions for a specific user over 30 days
+query UserVoiceSessions {
+  voiceSessions(limit: 20, userId: "USER_ID", days: 30) {
+    id
+    channelId
+    joinedAt
+    leftAt
+    durationMinutes
+    isOngoing
+  }
+}
+
+# Voice sessions with voice state detail (mute/deaf logs)
+query VoiceSessionsWithStates {
+  voiceSessions(limit: 5, userId: "USER_ID") {
+    id
+    channelId
+    joinedAt
+    leftAt
+    durationMinutes
+    voiceStates {
+      id
+      stateType
+      startedAt
+      endedAt
+      durationMinutes
+    }
+  }
+}
+
+# User voice sessions via nested resolver
+query UserVoiceSessionsNested {
+  user(userId: "USER_ID") {
+    userId
+    voiceSessions(limit: 5, days: 7) {
+      id
+      channelId
+      joinedAt
+      durationMinutes
+    }
+  }
+}
+
+
+# ── 6. ACTIVITIES ─────────────────────────────────────────────
+
+# Latest 20 activity log entries
+query LatestActivities {
+  activities(limit: 20) {
+    id
+    userId
+    activityType
+    activityName
+    startedAt
+    endedAt
+    durationMinutes
+    isOngoing
+  }
+}
+
+# Only PLAYING activities
+query PlayingActivities {
+  activities(limit: 20, activityType: PLAYING) {
+    id
+    userId
+    activityName
+    startedAt
+    durationMinutes
+    isOngoing
+  }
+}
+
+# Search activities by name (e.g. "Minecraft")
+query ActivitiesByName {
+  activities(limit: 20, activityName: "Minecraft") {
+    id
+    userId
+    activityType
+    startedAt
+    durationMinutes
+  }
+}
+
+# Only currently running activities
+query OngoingActivities {
+  activities(limit: 20, ongoingOnly: true) {
+    id
+    userId
+    activityType
+    activityName
+    startedAt
+  }
+}
+
+# User activities via nested resolver — filter to LISTENING
+query UserListeningActivities {
+  user(userId: "USER_ID") {
+    userId
+    activities(limit: 10, activityType: LISTENING) {
+      id
+      activityName
+      startedAt
+      durationMinutes
+    }
+  }
+}
+
+
+# ── 7. PRESENCE STATUS ────────────────────────────────────────
+
+# Latest 20 presence status changes
+query LatestPresenceStatus {
+  presenceStatus(limit: 20) {
+    id
+    userId
+    statusType
+    setAt
+    changedAt
+    durationMinutes
+    isCurrent
+  }
+}
+
+# Only users currently online
+query CurrentlyOnline {
+  presenceStatus(limit: 50, statusType: ONLINE, currentOnly: true) {
+    id
+    userId
+    setAt
+    isCurrent
+  }
+}
+
+# DND statuses in the last 7 days
+query DndStatuses {
+  presenceStatus(limit: 20, statusType: DND, days: 7) {
+    id
+    userId
+    setAt
+    changedAt
+    durationMinutes
+  }
+}
+
+# User presence history via nested resolver
+query UserPresenceHistory {
+  user(userId: "USER_ID") {
+    userId
+    presenceStatus(limit: 10, days: 7) {
+      statusType
+      setAt
+      changedAt
+      durationMinutes
+      isCurrent
+    }
+  }
+}
+
+
+# ── 8. CUSTOM STATUSES ───────────────────────────────────────
+
+# Latest 20 custom statuses
+query LatestCustomStatuses {
+  customStatuses(limit: 20) {
+    id
+    userId
+    statusText
+    emoji
+    setAt
+    hasText
+    hasEmoji
+  }
+}
+
+# Only custom statuses that include an emoji
+query CustomStatusesWithEmoji {
+  customStatuses(limit: 20, hasEmoji: true) {
+    id
+    userId
+    statusText
+    emoji
+    setAt
+  }
+}
+
+# User custom statuses via nested resolver
+query UserCustomStatuses {
+  user(userId: "USER_ID") {
+    userId
+    customStatuses(limit: 10) {
+      statusText
+      emoji
+      setAt
+      hasText
+      hasEmoji
+    }
+  }
+}
+
+
+# ── 9. STATISTICS ─────────────────────────────────────────────
+
+# Overall server stats (all time)
+query ServerStats {
+  serverStats {
+    totalUsers
+    totalMessages
+    totalVoiceTimeHours
+    totalActivities
+    mostActiveChannelId
+    mostCommonActivity
+  }
+}
+
+# Server stats for the last 30 days
+query ServerStats30Days {
+  serverStats(days: 30) {
+    totalUsers
+    totalMessages
+    totalVoiceTimeHours
+    totalActivities
+    mostActiveChannelId
+    mostCommonActivity
+  }
+}
+
+# Top 10 most active channels
+query TopChannels {
+  channelStats(limit: 10) {
+    channelId
+    totalMessages
+    uniqueUsers
+    mostActiveUserId
+  }
+}
+
+# Channel stats for the last 7 days
+query ChannelStats7Days {
+  channelStats(limit: 5, days: 7) {
+    channelId
+    totalMessages
+    uniqueUsers
+    mostActiveUserId
+  }
+}
+
+# Stats for a single channel
+query SingleChannelStats {
+  channelStats(channelId: "CHANNEL_ID") {
+    channelId
+    totalMessages
+    uniqueUsers
+    mostActiveUserId
+  }
+}
+
+
+# ── 10. ADMIN QUERIES (admin key required) ───────────────────
+
+# Create a new API key — the full key is returned only once, save it!
+mutation CreateApiKey {
+  createApiKey(name: "new-key-name", role: READ) {
+    id
+    name
+    keyPrefix
+    role
+    createdAt
+    apiKey
+  }
+}
+
+# List all API keys
+query ApiKeys {
+  apiKeys {
+    id
+    name
+    keyPrefix
+    role
+    createdAt
+    lastUsedAt
+  }
+}
+
+# Get a specific API key with usage stats
+query ApiKeyWithStats {
+  apiKey(keyId: 1) {
+    id
+    name
+    keyPrefix
+    role
+    createdAt
+    lastUsedAt
+    usageStats(days: 7) {
+      totalRequests
+      errorCount
+      successRate
+    }
+  }
+}
+
+# API usage log for the last 7 days
+query ApiUsage {
+  apiUsage(limit: 50, days: 7) {
+    id
+    timestamp
+    endpoint
+    method
+    responseStatus
+    apiKeyName
+  }
+}
+
+# Auth statistics
+query AuthStats {
+  authStats {
+    totalApiKeys
+    adminKeys
+    readKeys
+    totalRequestsToday
+  }
+}
