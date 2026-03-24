@@ -51,7 +51,7 @@ async def get_current_api_key(
             detail="Invalid Authorization header format. Use 'Bearer <api_key>'"
         )
 
-    api_key_plain = auth_header.replace("Bearer ", "")
+    api_key_plain = auth_header[len("Bearer "):].strip()
 
     # Hash the key for lookup
     key_hash = ApiKey.hash_key(api_key_plain)
