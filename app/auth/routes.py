@@ -9,19 +9,14 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
-from jose import JWTError, jwt
-from sqlmodel import Session
+import jwt
 
-from app.auth.database import get_auth_db
-from app.auth.services import AuthService
 from app.config import settings
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 security = HTTPBearer()
-
-# Configuration from settings
 
 
 class LoginRequest(BaseModel):
@@ -33,17 +28,11 @@ class LoginResponse(BaseModel):
     token_type: str = "bearer"
 
 
-def create_access_token(data: dict, expires_delta: timedelta = None):
+def create_access_token(data: dict, expires_delta: timedelta) -> str:
     """Create a JWT token."""
     to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.now(timezone.utc) + expires_delta
-    else:
-        expire = datetime.now(timezone.utc) + timedelta(minutes=15)
-
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
-    return encoded_jwt
+    to_encode["exp"] = datetime.now(timezone.utc) + expires_delta
+    return jwt.encode(to_encode, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
 
 def verify_frontend_token(
@@ -65,7 +54,7 @@ def verify_frontend_token(
             raise credentials_exception
 
         return payload
-    except JWTError:
+    except jwt.InvalidTokenError:
         raise credentials_exception
 
 

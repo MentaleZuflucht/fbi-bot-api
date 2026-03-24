@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from typing import Annotated, Optional
 from fastapi import Depends, HTTPException, Request, status
 from sqlmodel import Session, select
-from jose import JWTError, jwt
+import jwt
 
 from app.auth.database import get_auth_db
 from app.auth.models import ApiKey
@@ -71,7 +71,7 @@ async def get_current_api_key(
                 created_at=datetime.now(timezone.utc)
             )
             return virtual_key
-    except JWTError:
+    except jwt.InvalidTokenError:
         pass
 
     # Try API key authentication
