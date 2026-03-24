@@ -171,5 +171,5 @@ schema = strawberry.Schema(
 graphql_app = GraphQLRouter(
     schema,
     context_getter=get_graphql_context,
-    graphiql=True  # Enable GraphiQL interface
+    graphql_ide="graphiql"
 )
