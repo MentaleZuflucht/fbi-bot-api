@@ -116,3 +116,14 @@ class AuthStatsType:
     admin_keys: int
     read_keys: int
     total_requests_today: int
+
+
+@strawberry.type
+class CreateApiKeyResult:
+    """Result of createApiKey — includes the plaintext key shown exactly once."""
+    id: int
+    name: str
+    key_prefix: str
+    role: UserRoleType
+    created_at: datetime
+    api_key: str  # Full plaintext key — only available at creation time

@@ -13,7 +13,8 @@ from datetime import datetime, timedelta
 from sqlmodel import select, func
 from app.graphql.context import get_graphql_context, GraphQLContext
 from app.graphql.types.auth import (
-    ApiKeyType, ApiUsageType, AuthStatsType, ApiKeyUsageStatsType, UserRoleType
+    ApiKeyType, ApiUsageType, AuthStatsType, ApiKeyUsageStatsType, UserRoleType,
+    CreateApiKeyResult
 )
 from app.graphql.types.discord import (
     UserType, MessageActivityType, VoiceSessionType, ActivityLogType,
@@ -23,6 +24,7 @@ from app.graphql.types.discord import (
 )
 from app.graphql.resolvers.discord import Query as DiscordQuery
 from app.auth.models import ApiKey, ApiUsage
+from app.auth.services import AuthService
 
 logger = logging.getLogger(__name__)
 
@@ -152,9 +154,41 @@ class Query(DiscordQuery):
         return ApiKeyType.from_model(info.context.api_key)
 
 
+@strawberry.type
+class Mutation:
+    @strawberry.mutation
+    async def create_api_key(
+        self,
+        info: strawberry.Info[GraphQLContext, None],
+        name: str,
+        role: UserRoleType = UserRoleType.READ
+    ) -> CreateApiKeyResult:
+        """Create a new API key (admin only). The full key is returned once — save it."""
+        if not info.context.is_admin:
+            raise Exception("Admin access required")
+
+        api_key_obj, plain_key = await AuthService.create_api_key(
+            name=name,
+            role=role.value,
+            db=info.context.auth_db
+        )
+
+        logger.info(f"Admin '{info.context.api_key.name}' created API key '{name}' via GraphQL")
+
+        return CreateApiKeyResult(
+            id=api_key_obj.id,
+            name=api_key_obj.name,
+            key_prefix=api_key_obj.key_prefix,
+            role=UserRoleType(api_key_obj.role.value),
+            created_at=api_key_obj.created_at,
+            api_key=plain_key
+        )
+
+
 # Create the GraphQL schema
 schema = strawberry.Schema(
     query=Query,
+    mutation=Mutation,
     types=[
         # Auth types
         ApiKeyType, ApiUsageType, AuthStatsType, ApiKeyUsageStatsType, UserRoleType,
