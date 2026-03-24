@@ -19,6 +19,11 @@ class Settings(BaseSettings):
     debug: bool = False
     log_level: str = "INFO"
 
+    frontend_password: str = "change_me"
+    jwt_secret_key: str = "change-this-secret-key"
+    jwt_algorithm: str = "HS256"
+    jwt_expire_minutes: int = 60 * 24  # 1 day
+
     class Config:
         env_file = ".env"
         case_sensitive = False

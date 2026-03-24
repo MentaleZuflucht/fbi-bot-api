@@ -13,6 +13,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 import uvicorn
 from app.config import settings, setup_logging
 from app.auth.database import create_auth_tables, init_default_admin_key
+from app.auth.routes import router as auth_router
 from app.graphql.schema import graphql_app
 
 setup_logging()
@@ -127,6 +128,8 @@ app.include_router(
     prefix="/graphql",
     tags=["GraphQL"]
 )
+
+app.include_router(auth_router)
 
 
 @app.get("/", tags=["Root"])
