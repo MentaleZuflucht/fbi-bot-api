@@ -14,7 +14,7 @@ from app.graphql.context import GraphQLContext
 from app.graphql.types.discord import (
     UserType, MessageActivityType, VoiceSessionType, ActivityLogType,
     PresenceStatusLogType, CustomStatusType, ChannelStatsType, ServerStatsType,
-    DailyStatsType, HourlyDistributionType, TopItemType,
+    DailyStatsType, HourlyDistributionType, TopItemType, TopUserType,
     ActivityTypeEnum, MessageTypeEnum, DiscordStatusEnum
 )
 from app.discord.models import (
@@ -573,6 +573,59 @@ class Query:
             .limit(limit)
         ).all()
         return [TopItemType(name=r.activity_name, count=r.cnt) for r in rows]
+
+    @strawberry.field
+    def top_users(
+        self,
+        info: strawberry.Info[GraphQLContext, None],
+        days: Optional[int] = None,
+        limit: int = 10
+    ) -> List[TopUserType]:
+        """Top users ranked by message count, with voice hours."""
+        if not info.context.is_authenticated:
+            raise Exception("Authentication required")
+
+        db = info.context.discord_db
+
+        msg_q = select(
+            MessageActivity.user_id,
+            func.count(MessageActivity.message_id).label("cnt"),
+        )
+        if days:
+            msg_q = msg_q.where(MessageActivity.sent_at >= datetime.utcnow() - timedelta(days=days))
+        msg_rows = db.exec(
+            msg_q.group_by(MessageActivity.user_id)
+            .order_by(func.count(MessageActivity.message_id).desc())
+            .limit(limit)
+        ).all()
+
+        user_ids = [r.user_id for r in msg_rows]
+        if not user_ids:
+            return []
+
+        voice_q = select(
+            VoiceSession.user_id,
+            func.sum(func.extract("epoch", VoiceSession.left_at - VoiceSession.joined_at) / 3600).label("hours"),
+        ).where(VoiceSession.user_id.in_(user_ids), VoiceSession.left_at.isnot(None))
+        if days:
+            voice_q = voice_q.where(VoiceSession.joined_at >= datetime.utcnow() - timedelta(days=days))
+        voice_map = {r.user_id: float(r.hours or 0) for r in db.exec(voice_q.group_by(VoiceSession.user_id))}
+
+        names = db.exec(
+            select(UserNameHistory)
+            .where(UserNameHistory.user_id.in_(user_ids), UserNameHistory.effective_until.is_(None))
+        ).all()
+        name_map = {n.user_id: n.global_name or n.display_name or n.username for n in names}
+
+        return [
+            TopUserType(
+                user_id=str(r.user_id),
+                name=name_map.get(r.user_id, str(r.user_id)),
+                message_count=r.cnt,
+                voice_hours=round(voice_map.get(r.user_id, 0.0), 1),
+            )
+            for r in msg_rows
+        ]
 
     @strawberry.field
     def search_users(

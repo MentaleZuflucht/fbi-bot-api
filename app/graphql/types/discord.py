@@ -682,3 +682,12 @@ class TopItemType:
     """Generic ranked item (channel, activity, user, …)."""
     name: str
     count: int
+
+
+@strawberry.type
+class TopUserType:
+    """Ranked user with ID for linking."""
+    user_id: str
+    name: str
+    message_count: int
+    voice_hours: float
