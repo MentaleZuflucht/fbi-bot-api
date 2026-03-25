@@ -14,6 +14,7 @@ from app.graphql.context import GraphQLContext
 from app.graphql.types.discord import (
     UserType, MessageActivityType, VoiceSessionType, ActivityLogType,
     PresenceStatusLogType, CustomStatusType, ChannelStatsType, ServerStatsType,
+    DailyStatsType, HourlyDistributionType, TopItemType,
     ActivityTypeEnum, MessageTypeEnum, DiscordStatusEnum
 )
 from app.discord.models import (
@@ -431,6 +432,147 @@ class Query:
             most_active_channel_id=most_active_channel_id,
             most_common_activity=most_common_activity
         )
+
+    @strawberry.field
+    def daily_stats(
+        self,
+        info: strawberry.Info[GraphQLContext, None],
+        days: Optional[int] = 30,
+        user_id: Optional[str] = None
+    ) -> List[DailyStatsType]:
+        """Per-day message count, voice hours, activity count, and active users."""
+        if not info.context.is_authenticated:
+            raise Exception("Authentication required")
+
+        db = info.context.discord_db
+        date_trunc = func.date(MessageActivity.sent_at)
+
+        msg_q = select(
+            date_trunc.label("d"),
+            func.count(MessageActivity.message_id).label("cnt"),
+            func.count(func.distinct(MessageActivity.user_id)).label("users"),
+        )
+        if days:
+            msg_q = msg_q.where(MessageActivity.sent_at >= datetime.utcnow() - timedelta(days=days))
+        if user_id:
+            msg_q = msg_q.where(MessageActivity.user_id == int(user_id))
+        msg_rows = {
+            str(r.d): (r.cnt, r.users)
+            for r in db.exec(msg_q.group_by("d"))
+        }
+
+        voice_date = func.date(VoiceSession.joined_at)
+        voice_q = select(
+            voice_date.label("d"),
+            func.sum(
+                func.extract("epoch", VoiceSession.left_at - VoiceSession.joined_at) / 3600
+            ).label("hours"),
+        ).where(VoiceSession.left_at.isnot(None))
+        if days:
+            voice_q = voice_q.where(VoiceSession.joined_at >= datetime.utcnow() - timedelta(days=days))
+        if user_id:
+            voice_q = voice_q.where(VoiceSession.user_id == int(user_id))
+        voice_rows = {
+            str(r.d): float(r.hours or 0)
+            for r in db.exec(voice_q.group_by("d"))
+        }
+
+        act_date = func.date(ActivityLog.started_at)
+        act_q = select(act_date.label("d"), func.count(ActivityLog.id).label("cnt"))
+        if days:
+            act_q = act_q.where(ActivityLog.started_at >= datetime.utcnow() - timedelta(days=days))
+        if user_id:
+            act_q = act_q.where(ActivityLog.user_id == int(user_id))
+        act_rows = {str(r.d): r.cnt for r in db.exec(act_q.group_by("d"))}
+
+        all_dates = sorted(set(list(msg_rows) + list(voice_rows) + list(act_rows)))
+        return [
+            DailyStatsType(
+                date=d,
+                message_count=msg_rows.get(d, (0, 0))[0],
+                voice_hours=round(voice_rows.get(d, 0.0), 2),
+                activity_count=act_rows.get(d, 0),
+                active_users=msg_rows.get(d, (0, 0))[1],
+            )
+            for d in all_dates
+        ]
+
+    @strawberry.field
+    def hourly_message_distribution(
+        self,
+        info: strawberry.Info[GraphQLContext, None],
+        days: Optional[int] = None,
+        user_id: Optional[str] = None
+    ) -> List[HourlyDistributionType]:
+        """Message count by hour-of-day (0-23)."""
+        if not info.context.is_authenticated:
+            raise Exception("Authentication required")
+
+        hour_col = func.extract("hour", MessageActivity.sent_at).label("h")
+        q = select(hour_col, func.count(MessageActivity.message_id).label("cnt"))
+        if days:
+            q = q.where(MessageActivity.sent_at >= datetime.utcnow() - timedelta(days=days))
+        if user_id:
+            q = q.where(MessageActivity.user_id == int(user_id))
+
+        rows = {int(r.h): r.cnt for r in info.context.discord_db.exec(q.group_by("h"))}
+        return [HourlyDistributionType(hour=h, count=rows.get(h, 0)) for h in range(24)]
+
+    @strawberry.field
+    def top_channels(
+        self,
+        info: strawberry.Info[GraphQLContext, None],
+        days: Optional[int] = None,
+        limit: int = 10,
+        user_id: Optional[str] = None
+    ) -> List[TopItemType]:
+        """Top channels ranked by message count."""
+        if not info.context.is_authenticated:
+            raise Exception("Authentication required")
+
+        q = select(
+            MessageActivity.channel_id,
+            func.count(MessageActivity.message_id).label("cnt"),
+        )
+        if days:
+            q = q.where(MessageActivity.sent_at >= datetime.utcnow() - timedelta(days=days))
+        if user_id:
+            q = q.where(MessageActivity.user_id == int(user_id))
+
+        rows = info.context.discord_db.exec(
+            q.group_by(MessageActivity.channel_id)
+            .order_by(func.count(MessageActivity.message_id).desc())
+            .limit(limit)
+        ).all()
+        return [TopItemType(name=str(r.channel_id), count=r.cnt) for r in rows]
+
+    @strawberry.field
+    def top_activities(
+        self,
+        info: strawberry.Info[GraphQLContext, None],
+        days: Optional[int] = None,
+        limit: int = 10,
+        user_id: Optional[str] = None
+    ) -> List[TopItemType]:
+        """Top activities ranked by occurrence count."""
+        if not info.context.is_authenticated:
+            raise Exception("Authentication required")
+
+        q = select(
+            ActivityLog.activity_name,
+            func.count(ActivityLog.id).label("cnt"),
+        )
+        if days:
+            q = q.where(ActivityLog.started_at >= datetime.utcnow() - timedelta(days=days))
+        if user_id:
+            q = q.where(ActivityLog.user_id == int(user_id))
+
+        rows = info.context.discord_db.exec(
+            q.group_by(ActivityLog.activity_name)
+            .order_by(func.count(ActivityLog.id).desc())
+            .limit(limit)
+        ).all()
+        return [TopItemType(name=r.activity_name, count=r.cnt) for r in rows]
 
     @strawberry.field
     def search_users(

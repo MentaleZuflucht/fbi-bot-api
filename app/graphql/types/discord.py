@@ -658,3 +658,27 @@ class ServerStatsType:
     total_activities: int
     most_active_channel_id: Optional[str]
     most_common_activity: Optional[str]
+
+
+@strawberry.type
+class DailyStatsType:
+    """Per-day aggregated counts for charts."""
+    date: str
+    message_count: int
+    voice_hours: float
+    activity_count: int
+    active_users: int
+
+
+@strawberry.type
+class HourlyDistributionType:
+    """Message count bucketed by hour-of-day (0-23)."""
+    hour: int
+    count: int
+
+
+@strawberry.type
+class TopItemType:
+    """Generic ranked item (channel, activity, user, …)."""
+    name: str
+    count: int
