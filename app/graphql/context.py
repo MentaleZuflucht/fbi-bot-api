@@ -9,12 +9,13 @@ import logging
 from typing import Optional
 from fastapi import Request
 from sqlmodel import Session
+from strawberry.extensions import SchemaExtension
 from strawberry.fastapi import BaseContext
 
 from app.auth.models import ApiKey
 from app.auth.dependencies import get_current_api_key
-from app.auth.database import get_auth_db
-from app.discord.database import get_discord_db
+from app.auth.database import AuthSessionLocal
+from app.discord.database import DiscordSessionLocal
 
 logger = logging.getLogger(__name__)
 
@@ -55,46 +56,41 @@ class GraphQLContext(BaseContext):
         return self.api_key
 
 
+class DBSessionCleanupExtension(SchemaExtension):
+    """Closes database sessions stored on the GraphQL context after each request."""
+
+    def on_request_end(self):
+        context = self.execution_context.context
+        for attr in ("auth_db", "discord_db"):
+            db = getattr(context, attr, None)
+            if db is not None:
+                try:
+                    db.close()
+                    logger.debug("Closed %s session via extension cleanup", attr)
+                except Exception:
+                    logger.warning("Failed to close %s session", attr, exc_info=True)
+
+
 async def get_graphql_context(request: Request) -> GraphQLContext:
     """
     Create GraphQL context for each request.
 
-    This function is called for every GraphQL request to set up the context
-    that will be available to all resolvers.
-
-    Args:
-        request: FastAPI request object
-
-    Returns:
-        GraphQLContext: Context object with database sessions and user info
+    Sessions created here are guaranteed to be closed by
+    DBSessionCleanupExtension.on_request_end after the request completes.
     """
-    # Get database sessions
-    auth_db_gen = get_auth_db()
-    auth_db = next(auth_db_gen)
-
-    discord_db_gen = get_discord_db()
-    discord_db = next(discord_db_gen)
+    auth_db = AuthSessionLocal()
+    discord_db = DiscordSessionLocal()
 
     try:
-        # Try to authenticate API key
-        try:
-            api_key = await get_current_api_key(request, auth_db)
-            logger.debug(f"GraphQL request authenticated with API key: {api_key.name}")
-        except Exception as e:
-            logger.debug(f"GraphQL request without authentication: {str(e)}")
-            api_key = None
-
-        context = GraphQLContext(
-            request=request,
-            api_key=api_key,
-            auth_db=auth_db,
-            discord_db=discord_db
-        )
-
-        return context
-
+        api_key = await get_current_api_key(request, auth_db)
+        logger.debug(f"GraphQL request authenticated with API key: {api_key.name}")
     except Exception as e:
-        # Clean up database sessions on error
-        auth_db.close()
-        discord_db.close()
-        raise e
+        logger.debug(f"GraphQL request without authentication: {str(e)}")
+        api_key = None
+
+    return GraphQLContext(
+        request=request,
+        api_key=api_key,
+        auth_db=auth_db,
+        discord_db=discord_db
+    )
