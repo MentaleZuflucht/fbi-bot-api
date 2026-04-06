@@ -7,7 +7,7 @@ and other Discord-related information with proper authentication.
 
 import logging
 from typing import Optional, List
-from datetime import datetime, timedelta
+from collections import defaultdict
 import strawberry
 from sqlmodel import select, func, and_, or_
 from app.graphql.context import GraphQLContext
@@ -15,10 +15,12 @@ from app.graphql.types.discord import (
     UserType, MessageActivityType, VoiceSessionType, ActivityLogType,
     PresenceStatusLogType, CustomStatusType, ChannelStatsType, ServerStatsType,
     DailyStatsType, HourlyDistributionType, TopItemType, TopUserType,
-    ActivityTypeEnum, MessageTypeEnum, DiscordStatusEnum
+    TopVoiceStateUserType,
+    ActivityTypeEnum, MessageTypeEnum, DiscordStatusEnum, VoiceStateTypeEnum,
+    parse_date_filter,
 )
 from app.discord.models import (
-    User, MessageActivity, VoiceSession, ActivityLog,
+    User, MessageActivity, VoiceSession, VoiceStateLog, ActivityLog,
     PresenceStatusLog, CustomStatus, UserNameHistory
 )
 
@@ -65,17 +67,16 @@ class Query:
         offset: int = 0,
         search: Optional[str] = None
     ) -> List[UserType]:
-        """Get a list of Discord users."""
+        """Get a list of Discord users sorted by display name."""
         if not info.context.is_authenticated:
             raise Exception("Authentication required")
 
         query = select(User)
 
-        # If searching, join with name history and filter
         if search:
             query = query.join(UserNameHistory).where(
                 and_(
-                    UserNameHistory.effective_until.is_(None),  # Current name only
+                    UserNameHistory.effective_until.is_(None),
                     or_(
                         UserNameHistory.username.ilike(f"%{search}%"),
                         UserNameHistory.display_name.ilike(f"%{search}%"),
@@ -83,9 +84,23 @@ class Query:
                     )
                 )
             )
+        else:
+            query = query.outerjoin(
+                UserNameHistory,
+                and_(
+                    UserNameHistory.user_id == User.user_id,
+                    UserNameHistory.effective_until.is_(None),
+                ),
+            )
 
+        name_sort = func.coalesce(
+            UserNameHistory.global_name,
+            UserNameHistory.display_name,
+            UserNameHistory.username,
+            "",
+        )
         users = info.context.discord_db.exec(
-            query.order_by(User.first_seen.desc())
+            query.order_by(name_sort.asc())
             .offset(offset)
             .limit(limit)
         ).all()
@@ -101,7 +116,9 @@ class Query:
         user_id: Optional[str] = None,
         channel_id: Optional[str] = None,
         message_type: Optional[MessageTypeEnum] = None,
-        days: Optional[int] = None
+        days: Optional[int] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
     ) -> List[MessageActivityType]:
         """Get messages with optional filtering."""
         if not info.context.is_authenticated:
@@ -109,16 +126,18 @@ class Query:
 
         query = select(MessageActivity)
 
-        # Apply filters
         if user_id:
             query = query.where(MessageActivity.user_id == int(user_id))
         if channel_id:
             query = query.where(MessageActivity.channel_id == int(channel_id))
         if message_type:
             query = query.where(MessageActivity.message_type == message_type.value)
-        if days:
-            start_date = datetime.utcnow() - timedelta(days=days)
-            query = query.where(MessageActivity.sent_at >= start_date)
+
+        start, end = parse_date_filter(days, start_date, end_date)
+        if start:
+            query = query.where(MessageActivity.sent_at >= start)
+        if end:
+            query = query.where(MessageActivity.sent_at <= end)
 
         messages = info.context.discord_db.exec(
             query.order_by(MessageActivity.sent_at.desc())
@@ -137,6 +156,8 @@ class Query:
         user_id: Optional[str] = None,
         channel_id: Optional[str] = None,
         days: Optional[int] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
         ongoing_only: bool = False
     ) -> List[VoiceSessionType]:
         """Get voice sessions with optional filtering."""
@@ -145,16 +166,18 @@ class Query:
 
         query = select(VoiceSession)
 
-        # Apply filters
         if user_id:
             query = query.where(VoiceSession.user_id == int(user_id))
         if channel_id:
             query = query.where(VoiceSession.channel_id == int(channel_id))
-        if days:
-            start_date = datetime.utcnow() - timedelta(days=days)
-            query = query.where(VoiceSession.joined_at >= start_date)
         if ongoing_only:
             query = query.where(VoiceSession.left_at.is_(None))
+
+        start, end = parse_date_filter(days, start_date, end_date)
+        if start:
+            query = query.where(VoiceSession.joined_at >= start)
+        if end:
+            query = query.where(VoiceSession.joined_at <= end)
 
         sessions = info.context.discord_db.exec(
             query.order_by(VoiceSession.joined_at.desc())
@@ -174,6 +197,8 @@ class Query:
         activity_type: Optional[ActivityTypeEnum] = None,
         activity_name: Optional[str] = None,
         days: Optional[int] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
         ongoing_only: bool = False
     ) -> List[ActivityLogType]:
         """Get activities with optional filtering."""
@@ -182,18 +207,20 @@ class Query:
 
         query = select(ActivityLog)
 
-        # Apply filters
         if user_id:
             query = query.where(ActivityLog.user_id == int(user_id))
         if activity_type:
             query = query.where(ActivityLog.activity_type == activity_type.value)
         if activity_name:
             query = query.where(ActivityLog.activity_name.ilike(f"%{activity_name}%"))
-        if days:
-            start_date = datetime.utcnow() - timedelta(days=days)
-            query = query.where(ActivityLog.started_at >= start_date)
         if ongoing_only:
             query = query.where(ActivityLog.ended_at.is_(None))
+
+        start, end = parse_date_filter(days, start_date, end_date)
+        if start:
+            query = query.where(ActivityLog.started_at >= start)
+        if end:
+            query = query.where(ActivityLog.started_at <= end)
 
         activities = info.context.discord_db.exec(
             query.order_by(ActivityLog.started_at.desc())
@@ -212,6 +239,8 @@ class Query:
         user_id: Optional[int] = None,
         status_type: Optional[DiscordStatusEnum] = None,
         days: Optional[int] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
         current_only: bool = False
     ) -> List[PresenceStatusLogType]:
         """Get presence status logs with optional filtering."""
@@ -220,16 +249,18 @@ class Query:
 
         query = select(PresenceStatusLog)
 
-        # Apply filters
         if user_id:
             query = query.where(PresenceStatusLog.user_id == int(user_id))
         if status_type:
             query = query.where(PresenceStatusLog.status_type == status_type.value)
-        if days:
-            start_date = datetime.utcnow() - timedelta(days=days)
-            query = query.where(PresenceStatusLog.set_at >= start_date)
         if current_only:
             query = query.where(PresenceStatusLog.changed_at.is_(None))
+
+        start, end = parse_date_filter(days, start_date, end_date)
+        if start:
+            query = query.where(PresenceStatusLog.set_at >= start)
+        if end:
+            query = query.where(PresenceStatusLog.set_at <= end)
 
         statuses = info.context.discord_db.exec(
             query.order_by(PresenceStatusLog.set_at.desc())
@@ -248,7 +279,9 @@ class Query:
         user_id: Optional[int] = None,
         has_text: Optional[bool] = None,
         has_emoji: Optional[bool] = None,
-        days: Optional[int] = None
+        days: Optional[int] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
     ) -> List[CustomStatusType]:
         """Get custom statuses with optional filtering."""
         if not info.context.is_authenticated:
@@ -256,7 +289,6 @@ class Query:
 
         query = select(CustomStatus)
 
-        # Apply filters
         if user_id:
             query = query.where(CustomStatus.user_id == int(user_id))
         if has_text is not None:
@@ -269,9 +301,12 @@ class Query:
                 query = query.where(CustomStatus.emoji.isnot(None))
             else:
                 query = query.where(CustomStatus.emoji.is_(None))
-        if days:
-            start_date = datetime.utcnow() - timedelta(days=days)
-            query = query.where(CustomStatus.set_at >= start_date)
+
+        start, end = parse_date_filter(days, start_date, end_date)
+        if start:
+            query = query.where(CustomStatus.set_at >= start)
+        if end:
+            query = query.where(CustomStatus.set_at <= end)
 
         statuses = info.context.discord_db.exec(
             query.order_by(CustomStatus.set_at.desc())
@@ -287,29 +322,29 @@ class Query:
         info: strawberry.Info[GraphQLContext, None],
         channel_id: Optional[str] = None,
         limit: int = 10,
-        days: Optional[int] = None
+        days: Optional[int] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
     ) -> List[ChannelStatsType]:
         """Get channel statistics."""
         if not info.context.is_authenticated:
             raise Exception("Authentication required")
 
-        # Base query for channel message stats
+        start, end = parse_date_filter(days, start_date, end_date)
+
         query = select(
             MessageActivity.channel_id,
             func.count(MessageActivity.message_id).label('total_messages'),
             func.count(func.distinct(MessageActivity.user_id)).label('unique_users')
         )
 
-        # Apply time filter if specified
-        if days:
-            start_date = datetime.utcnow() - timedelta(days=days)
-            query = query.where(MessageActivity.sent_at >= start_date)
-
-        # Filter by specific channel if requested
+        if start:
+            query = query.where(MessageActivity.sent_at >= start)
+        if end:
+            query = query.where(MessageActivity.sent_at <= end)
         if channel_id:
             query = query.where(MessageActivity.channel_id == int(channel_id))
 
-        # Group and order
         query = query.group_by(MessageActivity.channel_id).order_by(
             func.count(MessageActivity.message_id).desc()
         ).limit(limit)
@@ -318,16 +353,15 @@ class Query:
 
         channel_stats = []
         for result in results:
-            # Get most active user for this channel
             most_active_user_query = select(
                 MessageActivity.user_id,
                 func.count(MessageActivity.message_id).label('count')
             ).where(MessageActivity.channel_id == result.channel_id)
 
-            if days:
-                most_active_user_query = most_active_user_query.where(
-                    MessageActivity.sent_at >= start_date
-                )
+            if start:
+                most_active_user_query = most_active_user_query.where(MessageActivity.sent_at >= start)
+            if end:
+                most_active_user_query = most_active_user_query.where(MessageActivity.sent_at <= end)
 
             most_active_user = info.context.discord_db.exec(
                 most_active_user_query.group_by(MessageActivity.user_id)
@@ -348,51 +382,54 @@ class Query:
     def server_stats(
         self,
         info: strawberry.Info[GraphQLContext, None],
-        days: Optional[int] = None
+        days: Optional[int] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
     ) -> ServerStatsType:
         """Get overall server statistics."""
         if not info.context.is_authenticated:
             raise Exception("Authentication required")
 
-        # Base time filter
-        time_filter = None
-        if days:
-            start_date = datetime.utcnow() - timedelta(days=days)
-            time_filter = start_date
+        start, end = parse_date_filter(days, start_date, end_date)
 
-        # Total users
         user_query = select(func.count(User.user_id))
-        if time_filter:
-            user_query = user_query.where(User.first_seen >= time_filter)
+        if start:
+            user_query = user_query.where(User.first_seen >= start)
+        if end:
+            user_query = user_query.where(User.first_seen <= end)
         total_users = info.context.discord_db.exec(user_query).first() or 0
 
-        # Total messages
         message_query = select(func.count(MessageActivity.message_id))
-        if time_filter:
-            message_query = message_query.where(MessageActivity.sent_at >= time_filter)
+        if start:
+            message_query = message_query.where(MessageActivity.sent_at >= start)
+        if end:
+            message_query = message_query.where(MessageActivity.sent_at <= end)
         total_messages = info.context.discord_db.exec(message_query).first() or 0
 
-        # Total voice time in hours
         voice_query = select(func.sum(
             func.extract('epoch', VoiceSession.left_at - VoiceSession.joined_at) / 3600
         )).where(VoiceSession.left_at.isnot(None))
-        if time_filter:
-            voice_query = voice_query.where(VoiceSession.joined_at >= time_filter)
+        if start:
+            voice_query = voice_query.where(VoiceSession.joined_at >= start)
+        if end:
+            voice_query = voice_query.where(VoiceSession.joined_at <= end)
         total_voice_hours = info.context.discord_db.exec(voice_query).first() or 0.0
 
-        # Total activities
         activity_query = select(func.count(ActivityLog.id))
-        if time_filter:
-            activity_query = activity_query.where(ActivityLog.started_at >= time_filter)
+        if start:
+            activity_query = activity_query.where(ActivityLog.started_at >= start)
+        if end:
+            activity_query = activity_query.where(ActivityLog.started_at <= end)
         total_activities = info.context.discord_db.exec(activity_query).first() or 0
 
-        # Most active channel
         channel_query = select(
             MessageActivity.channel_id,
             func.count(MessageActivity.message_id).label('count')
         )
-        if time_filter:
-            channel_query = channel_query.where(MessageActivity.sent_at >= time_filter)
+        if start:
+            channel_query = channel_query.where(MessageActivity.sent_at >= start)
+        if end:
+            channel_query = channel_query.where(MessageActivity.sent_at <= end)
 
         most_active_channel_data = info.context.discord_db.exec(
             channel_query.group_by(MessageActivity.channel_id)
@@ -404,15 +441,14 @@ class Query:
             str(most_active_channel_data.channel_id) if most_active_channel_data else None
         )
 
-        # Most common activity
         common_activity_query = select(
             ActivityLog.activity_name,
             func.count(ActivityLog.id).label('count')
         )
-        if time_filter:
-            common_activity_query = common_activity_query.where(
-                ActivityLog.started_at >= time_filter
-            )
+        if start:
+            common_activity_query = common_activity_query.where(ActivityLog.started_at >= start)
+        if end:
+            common_activity_query = common_activity_query.where(ActivityLog.started_at <= end)
 
         most_common_activity_data = info.context.discord_db.exec(
             common_activity_query.group_by(ActivityLog.activity_name)
@@ -438,13 +474,16 @@ class Query:
         self,
         info: strawberry.Info[GraphQLContext, None],
         days: Optional[int] = 30,
-        user_id: Optional[str] = None
+        user_id: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
     ) -> List[DailyStatsType]:
         """Per-day message count, voice hours, activity count, and active users."""
         if not info.context.is_authenticated:
             raise Exception("Authentication required")
 
         db = info.context.discord_db
+        start, end = parse_date_filter(days, start_date, end_date)
         date_trunc = func.date(MessageActivity.sent_at)
 
         msg_q = select(
@@ -452,8 +491,10 @@ class Query:
             func.count(MessageActivity.message_id).label("cnt"),
             func.count(func.distinct(MessageActivity.user_id)).label("users"),
         )
-        if days:
-            msg_q = msg_q.where(MessageActivity.sent_at >= datetime.utcnow() - timedelta(days=days))
+        if start:
+            msg_q = msg_q.where(MessageActivity.sent_at >= start)
+        if end:
+            msg_q = msg_q.where(MessageActivity.sent_at <= end)
         if user_id:
             msg_q = msg_q.where(MessageActivity.user_id == int(user_id))
         msg_rows = {
@@ -468,8 +509,10 @@ class Query:
                 func.extract("epoch", VoiceSession.left_at - VoiceSession.joined_at) / 3600
             ).label("hours"),
         ).where(VoiceSession.left_at.isnot(None))
-        if days:
-            voice_q = voice_q.where(VoiceSession.joined_at >= datetime.utcnow() - timedelta(days=days))
+        if start:
+            voice_q = voice_q.where(VoiceSession.joined_at >= start)
+        if end:
+            voice_q = voice_q.where(VoiceSession.joined_at <= end)
         if user_id:
             voice_q = voice_q.where(VoiceSession.user_id == int(user_id))
         voice_rows = {
@@ -479,8 +522,10 @@ class Query:
 
         act_date = func.date(ActivityLog.started_at)
         act_q = select(act_date.label("d"), func.count(ActivityLog.id).label("cnt"))
-        if days:
-            act_q = act_q.where(ActivityLog.started_at >= datetime.utcnow() - timedelta(days=days))
+        if start:
+            act_q = act_q.where(ActivityLog.started_at >= start)
+        if end:
+            act_q = act_q.where(ActivityLog.started_at <= end)
         if user_id:
             act_q = act_q.where(ActivityLog.user_id == int(user_id))
         act_rows = {str(r.d): r.cnt for r in db.exec(act_q.group_by("d"))}
@@ -502,16 +547,21 @@ class Query:
         self,
         info: strawberry.Info[GraphQLContext, None],
         days: Optional[int] = None,
-        user_id: Optional[str] = None
+        user_id: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
     ) -> List[HourlyDistributionType]:
         """Message count by hour-of-day (0-23)."""
         if not info.context.is_authenticated:
             raise Exception("Authentication required")
 
+        start, end = parse_date_filter(days, start_date, end_date)
         hour_col = func.extract("hour", MessageActivity.sent_at).label("h")
         q = select(hour_col, func.count(MessageActivity.message_id).label("cnt"))
-        if days:
-            q = q.where(MessageActivity.sent_at >= datetime.utcnow() - timedelta(days=days))
+        if start:
+            q = q.where(MessageActivity.sent_at >= start)
+        if end:
+            q = q.where(MessageActivity.sent_at <= end)
         if user_id:
             q = q.where(MessageActivity.user_id == int(user_id))
 
@@ -524,27 +574,46 @@ class Query:
         info: strawberry.Info[GraphQLContext, None],
         days: Optional[int] = None,
         limit: int = 10,
-        user_id: Optional[str] = None
+        user_id: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
     ) -> List[TopItemType]:
-        """Top channels ranked by message count."""
+        """Top channels ranked by total voice hours spent."""
         if not info.context.is_authenticated:
             raise Exception("Authentication required")
 
-        q = select(
-            MessageActivity.channel_id,
-            func.count(MessageActivity.message_id).label("cnt"),
+        start, end = parse_date_filter(days, start_date, end_date)
+
+        hours_sum = func.sum(
+            func.extract("epoch", VoiceSession.left_at - VoiceSession.joined_at) / 3600
         )
-        if days:
-            q = q.where(MessageActivity.sent_at >= datetime.utcnow() - timedelta(days=days))
+
+        q = select(
+            VoiceSession.channel_id,
+            func.count(VoiceSession.id).label("cnt"),
+            hours_sum.label("hours"),
+        ).where(VoiceSession.left_at.isnot(None))
+
+        if start:
+            q = q.where(VoiceSession.joined_at >= start)
+        if end:
+            q = q.where(VoiceSession.joined_at <= end)
         if user_id:
-            q = q.where(MessageActivity.user_id == int(user_id))
+            q = q.where(VoiceSession.user_id == int(user_id))
 
         rows = info.context.discord_db.exec(
-            q.group_by(MessageActivity.channel_id)
-            .order_by(func.count(MessageActivity.message_id).desc())
+            q.group_by(VoiceSession.channel_id)
+            .order_by(hours_sum.desc())
             .limit(limit)
         ).all()
-        return [TopItemType(name=str(r.channel_id), count=r.cnt) for r in rows]
+        return [
+            TopItemType(
+                name=str(r.channel_id),
+                count=r.cnt,
+                hours=round(float(r.hours or 0), 1),
+            )
+            for r in rows
+        ]
 
     @strawberry.field
     def top_activities(
@@ -552,64 +621,100 @@ class Query:
         info: strawberry.Info[GraphQLContext, None],
         days: Optional[int] = None,
         limit: int = 10,
-        user_id: Optional[str] = None
+        user_id: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
     ) -> List[TopItemType]:
-        """Top activities ranked by occurrence count."""
+        """Top activities ranked by total hours spent."""
         if not info.context.is_authenticated:
             raise Exception("Authentication required")
+
+        start, end = parse_date_filter(days, start_date, end_date)
+
+        hours_sum = func.sum(
+            func.extract("epoch", ActivityLog.ended_at - ActivityLog.started_at) / 3600
+        )
 
         q = select(
             ActivityLog.activity_name,
             func.count(ActivityLog.id).label("cnt"),
-        )
-        if days:
-            q = q.where(ActivityLog.started_at >= datetime.utcnow() - timedelta(days=days))
+            hours_sum.label("hours"),
+        ).where(ActivityLog.ended_at.isnot(None))
+
+        if start:
+            q = q.where(ActivityLog.started_at >= start)
+        if end:
+            q = q.where(ActivityLog.started_at <= end)
         if user_id:
             q = q.where(ActivityLog.user_id == int(user_id))
 
         rows = info.context.discord_db.exec(
             q.group_by(ActivityLog.activity_name)
-            .order_by(func.count(ActivityLog.id).desc())
+            .order_by(hours_sum.desc())
             .limit(limit)
         ).all()
-        return [TopItemType(name=r.activity_name, count=r.cnt) for r in rows]
+        return [
+            TopItemType(
+                name=r.activity_name,
+                count=r.cnt,
+                hours=round(float(r.hours or 0), 1),
+            )
+            for r in rows
+        ]
 
     @strawberry.field
     def top_users(
         self,
         info: strawberry.Info[GraphQLContext, None],
         days: Optional[int] = None,
-        limit: int = 10
+        limit: int = 10,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
     ) -> List[TopUserType]:
-        """Top users ranked by message count, with voice hours."""
+        """Top users ranked by composite score (voice hours * 60 + messages)."""
         if not info.context.is_authenticated:
             raise Exception("Authentication required")
 
         db = info.context.discord_db
+        start, end = parse_date_filter(days, start_date, end_date)
 
         msg_q = select(
             MessageActivity.user_id,
             func.count(MessageActivity.message_id).label("cnt"),
         )
-        if days:
-            msg_q = msg_q.where(MessageActivity.sent_at >= datetime.utcnow() - timedelta(days=days))
-        msg_rows = db.exec(
-            msg_q.group_by(MessageActivity.user_id)
-            .order_by(func.count(MessageActivity.message_id).desc())
-            .limit(limit)
-        ).all()
-
-        user_ids = [r.user_id for r in msg_rows]
-        if not user_ids:
-            return []
+        if start:
+            msg_q = msg_q.where(MessageActivity.sent_at >= start)
+        if end:
+            msg_q = msg_q.where(MessageActivity.sent_at <= end)
+        msg_map = {r.user_id: r.cnt for r in db.exec(msg_q.group_by(MessageActivity.user_id))}
 
         voice_q = select(
             VoiceSession.user_id,
             func.sum(func.extract("epoch", VoiceSession.left_at - VoiceSession.joined_at) / 3600).label("hours"),
-        ).where(VoiceSession.user_id.in_(user_ids), VoiceSession.left_at.isnot(None))
-        if days:
-            voice_q = voice_q.where(VoiceSession.joined_at >= datetime.utcnow() - timedelta(days=days))
-        voice_map = {r.user_id: float(r.hours or 0) for r in db.exec(voice_q.group_by(VoiceSession.user_id))}
+        ).where(VoiceSession.left_at.isnot(None))
+        if start:
+            voice_q = voice_q.where(VoiceSession.joined_at >= start)
+        if end:
+            voice_q = voice_q.where(VoiceSession.joined_at <= end)
+        voice_map = {
+            r.user_id: float(r.hours or 0)
+            for r in db.exec(voice_q.group_by(VoiceSession.user_id))
+        }
+
+        all_user_ids = set(msg_map.keys()) | set(voice_map.keys())
+        scored = []
+        for uid in all_user_ids:
+            msgs = msg_map.get(uid, 0)
+            hours = voice_map.get(uid, 0.0)
+            score = hours * 60 + msgs
+            scored.append((uid, msgs, hours, score))
+
+        scored.sort(key=lambda x: x[3], reverse=True)
+        scored = scored[:limit]
+
+        user_ids = [s[0] for s in scored]
+        if not user_ids:
+            return []
 
         names = db.exec(
             select(UserNameHistory)
@@ -619,13 +724,86 @@ class Query:
 
         return [
             TopUserType(
-                user_id=str(r.user_id),
-                name=name_map.get(r.user_id, str(r.user_id)),
-                message_count=r.cnt,
-                voice_hours=round(voice_map.get(r.user_id, 0.0), 1),
+                user_id=str(uid),
+                name=name_map.get(uid, str(uid)),
+                message_count=msgs,
+                voice_hours=round(hours, 1),
+                score=round(score, 1),
             )
-            for r in msg_rows
+            for uid, msgs, hours, score in scored
         ]
+
+    @strawberry.field
+    def top_voice_state_users(
+        self,
+        info: strawberry.Info[GraphQLContext, None],
+        days: Optional[int] = None,
+        limit: int = 5,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        state_type: Optional[VoiceStateTypeEnum] = None,
+    ) -> List[TopVoiceStateUserType]:
+        """Top users by total hours in each voice state (muted, deaf, streaming, etc.)."""
+        if not info.context.is_authenticated:
+            raise Exception("Authentication required")
+
+        db = info.context.discord_db
+        start, end = parse_date_filter(days, start_date, end_date)
+
+        hours_sum = func.sum(
+            func.extract("epoch", VoiceStateLog.ended_at - VoiceStateLog.started_at) / 3600
+        )
+
+        q = select(
+            VoiceStateLog.state_type,
+            VoiceSession.user_id,
+            hours_sum.label("hours"),
+        ).join(
+            VoiceSession, VoiceStateLog.session_id == VoiceSession.id
+        ).where(
+            VoiceStateLog.ended_at.isnot(None)
+        )
+
+        if start:
+            q = q.where(VoiceStateLog.started_at >= start)
+        if end:
+            q = q.where(VoiceStateLog.started_at <= end)
+        if state_type:
+            q = q.where(VoiceStateLog.state_type == state_type.value)
+
+        q = q.group_by(VoiceStateLog.state_type, VoiceSession.user_id).order_by(
+            VoiceStateLog.state_type, hours_sum.desc()
+        )
+
+        rows = db.exec(q).all()
+
+        grouped: dict[str, list] = defaultdict(list)
+        all_user_ids: set[int] = set()
+        for r in rows:
+            st_val = r.state_type.value if hasattr(r.state_type, 'value') else str(r.state_type)
+            if len(grouped[st_val]) < limit:
+                grouped[st_val].append(r)
+                all_user_ids.add(r.user_id)
+
+        name_map: dict[int, str] = {}
+        if all_user_ids:
+            names = db.exec(
+                select(UserNameHistory)
+                .where(UserNameHistory.user_id.in_(list(all_user_ids)), UserNameHistory.effective_until.is_(None))
+            ).all()
+            name_map = {n.user_id: n.global_name or n.display_name or n.username for n in names}
+
+        results: List[TopVoiceStateUserType] = []
+        for st_val, entries in grouped.items():
+            for r in entries:
+                results.append(TopVoiceStateUserType(
+                    state_type=VoiceStateTypeEnum(st_val),
+                    user_id=str(r.user_id),
+                    name=name_map.get(r.user_id, str(r.user_id)),
+                    hours=round(float(r.hours or 0), 1),
+                ))
+
+        return results
 
     @strawberry.field
     def search_users(
@@ -643,7 +821,6 @@ class Query:
 
         search_term = f"%{query.strip()}%"
 
-        # Search in current names (effective_until is NULL)
         users = info.context.discord_db.exec(
             select(User)
             .join(UserNameHistory)

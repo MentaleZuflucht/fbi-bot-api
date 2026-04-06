@@ -5,16 +5,35 @@ These types expose the Discord database models for querying user activity,
 messages, voice sessions, and other Discord-related data.
 """
 
-from typing import Optional, List
-from datetime import datetime
+from typing import Optional, List, Tuple
+from datetime import datetime, timedelta
 from enum import Enum
 import strawberry
 from sqlmodel import select, func, and_
+from sqlalchemy import case
 from app.graphql.context import GraphQLContext
 from app.discord.models import (
     User, MessageActivity, VoiceSession, VoiceStateLog,
     PresenceStatusLog, ActivityLog, CustomStatus, UserNameHistory
 )
+
+
+def parse_date_filter(
+    days: Optional[int] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+) -> Tuple[Optional[datetime], Optional[datetime]]:
+    """Convert flexible date filter params into a (start, end) datetime pair.
+    start_date/end_date (ISO strings) take precedence over days."""
+    start = None
+    end = None
+    if start_date:
+        start = datetime.fromisoformat(start_date)
+    if end_date:
+        end = datetime.fromisoformat(end_date).replace(hour=23, minute=59, second=59)
+    if start is None and days is not None:
+        start = datetime.utcnow() - timedelta(days=days)
+    return start, end
 
 
 # Enums
@@ -339,9 +358,17 @@ class UserStatsType:
 
 
 @strawberry.type
+class UniqueActivityType:
+    """Aggregated unique activity for a user."""
+    activity_name: str
+    total_hours: float
+    count: int
+
+
+@strawberry.type
 class UserType:
     """GraphQL type for Discord users."""
-    user_id: str  # Discord snowflakes are too large for GraphQL Int
+    user_id: str
     first_seen: datetime
 
     @strawberry.field
@@ -386,21 +413,23 @@ class UserType:
         info: strawberry.Info[GraphQLContext, None],
         limit: int = 50,
         channel_id: Optional[int] = None,
-        days: Optional[int] = None
+        days: Optional[int] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
     ) -> List[MessageActivityType]:
         """Get messages for this user."""
         if not info.context.is_authenticated:
             raise Exception("Authentication required")
 
         query = select(MessageActivity).where(MessageActivity.user_id == self.user_id)
-
         if channel_id:
             query = query.where(MessageActivity.channel_id == channel_id)
 
-        if days:
-            from datetime import timedelta
-            start_date = datetime.utcnow() - timedelta(days=days)
-            query = query.where(MessageActivity.sent_at >= start_date)
+        start, end = parse_date_filter(days, start_date, end_date)
+        if start:
+            query = query.where(MessageActivity.sent_at >= start)
+        if end:
+            query = query.where(MessageActivity.sent_at <= end)
 
         messages = info.context.discord_db.exec(
             query.order_by(MessageActivity.sent_at.desc()).limit(limit)
@@ -413,7 +442,9 @@ class UserType:
         self,
         info: strawberry.Info[GraphQLContext, None],
         days: Optional[int] = None,
-        channel_id: Optional[int] = None
+        channel_id: Optional[int] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
     ) -> int:
         """Get total message count for this user."""
         if not info.context.is_authenticated:
@@ -422,14 +453,14 @@ class UserType:
         query = select(func.count(MessageActivity.message_id)).where(
             MessageActivity.user_id == self.user_id
         )
-
         if channel_id:
             query = query.where(MessageActivity.channel_id == channel_id)
 
-        if days:
-            from datetime import timedelta
-            start_date = datetime.utcnow() - timedelta(days=days)
-            query = query.where(MessageActivity.sent_at >= start_date)
+        start, end = parse_date_filter(days, start_date, end_date)
+        if start:
+            query = query.where(MessageActivity.sent_at >= start)
+        if end:
+            query = query.where(MessageActivity.sent_at <= end)
 
         count = info.context.discord_db.exec(query).first()
         return count or 0
@@ -439,7 +470,9 @@ class UserType:
         self,
         info: strawberry.Info[GraphQLContext, None],
         limit: int = 50,
-        days: Optional[int] = None
+        days: Optional[int] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
     ) -> List[VoiceSessionType]:
         """Get voice sessions for this user."""
         if not info.context.is_authenticated:
@@ -447,10 +480,11 @@ class UserType:
 
         query = select(VoiceSession).where(VoiceSession.user_id == self.user_id)
 
-        if days:
-            from datetime import timedelta
-            start_date = datetime.utcnow() - timedelta(days=days)
-            query = query.where(VoiceSession.joined_at >= start_date)
+        start, end = parse_date_filter(days, start_date, end_date)
+        if start:
+            query = query.where(VoiceSession.joined_at >= start)
+        if end:
+            query = query.where(VoiceSession.joined_at <= end)
 
         sessions = info.context.discord_db.exec(
             query.order_by(VoiceSession.joined_at.desc()).limit(limit)
@@ -464,21 +498,23 @@ class UserType:
         info: strawberry.Info[GraphQLContext, None],
         limit: int = 50,
         activity_type: Optional[ActivityTypeEnum] = None,
-        days: Optional[int] = None
+        days: Optional[int] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
     ) -> List[ActivityLogType]:
         """Get activities for this user."""
         if not info.context.is_authenticated:
             raise Exception("Authentication required")
 
         query = select(ActivityLog).where(ActivityLog.user_id == self.user_id)
-
         if activity_type:
             query = query.where(ActivityLog.activity_type == activity_type.value)
 
-        if days:
-            from datetime import timedelta
-            start_date = datetime.utcnow() - timedelta(days=days)
-            query = query.where(ActivityLog.started_at >= start_date)
+        start, end = parse_date_filter(days, start_date, end_date)
+        if start:
+            query = query.where(ActivityLog.started_at >= start)
+        if end:
+            query = query.where(ActivityLog.started_at <= end)
 
         activities = info.context.discord_db.exec(
             query.order_by(ActivityLog.started_at.desc()).limit(limit)
@@ -491,7 +527,9 @@ class UserType:
         self,
         info: strawberry.Info[GraphQLContext, None],
         limit: int = 50,
-        days: Optional[int] = None
+        days: Optional[int] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
     ) -> List[PresenceStatusLogType]:
         """Get presence status history for this user."""
         if not info.context.is_authenticated:
@@ -499,10 +537,11 @@ class UserType:
 
         query = select(PresenceStatusLog).where(PresenceStatusLog.user_id == self.user_id)
 
-        if days:
-            from datetime import timedelta
-            start_date = datetime.utcnow() - timedelta(days=days)
-            query = query.where(PresenceStatusLog.set_at >= start_date)
+        start, end = parse_date_filter(days, start_date, end_date)
+        if start:
+            query = query.where(PresenceStatusLog.set_at >= start)
+        if end:
+            query = query.where(PresenceStatusLog.set_at <= end)
 
         statuses = info.context.discord_db.exec(
             query.order_by(PresenceStatusLog.set_at.desc()).limit(limit)
@@ -515,7 +554,9 @@ class UserType:
         self,
         info: strawberry.Info[GraphQLContext, None],
         limit: int = 50,
-        days: Optional[int] = None
+        days: Optional[int] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
     ) -> List[CustomStatusType]:
         """Get custom statuses for this user."""
         if not info.context.is_authenticated:
@@ -523,10 +564,11 @@ class UserType:
 
         query = select(CustomStatus).where(CustomStatus.user_id == self.user_id)
 
-        if days:
-            from datetime import timedelta
-            start_date = datetime.utcnow() - timedelta(days=days)
-            query = query.where(CustomStatus.set_at >= start_date)
+        start, end = parse_date_filter(days, start_date, end_date)
+        if start:
+            query = query.where(CustomStatus.set_at >= start)
+        if end:
+            query = query.where(CustomStatus.set_at <= end)
 
         statuses = info.context.discord_db.exec(
             query.order_by(CustomStatus.set_at.desc()).limit(limit)
@@ -535,16 +577,65 @@ class UserType:
         return [CustomStatusType.from_model(status) for status in statuses]
 
     @strawberry.field
+    def unique_activities(
+        self,
+        info: strawberry.Info[GraphQLContext, None],
+        days: Optional[int] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ) -> List[UniqueActivityType]:
+        """Get every unique activity this user has done, with total hours and count."""
+        if not info.context.is_authenticated:
+            raise Exception("Authentication required")
+
+        hours_expr = func.coalesce(
+            func.sum(
+                case(
+                    (ActivityLog.ended_at.isnot(None),
+                     func.extract("epoch", ActivityLog.ended_at - ActivityLog.started_at) / 3600),
+                    else_=0,
+                )
+            ), 0.0
+        )
+
+        query = select(
+            ActivityLog.activity_name,
+            func.count(ActivityLog.id).label("cnt"),
+            hours_expr.label("hours"),
+        ).where(ActivityLog.user_id == self.user_id)
+
+        start, end = parse_date_filter(days, start_date, end_date)
+        if start:
+            query = query.where(ActivityLog.started_at >= start)
+        if end:
+            query = query.where(ActivityLog.started_at <= end)
+
+        query = query.group_by(ActivityLog.activity_name).order_by(hours_expr.desc())
+
+        results = info.context.discord_db.exec(query).all()
+        return [
+            UniqueActivityType(
+                activity_name=r.activity_name,
+                total_hours=round(float(r.hours or 0), 1),
+                count=r.cnt,
+            )
+            for r in results
+        ]
+
+    @strawberry.field
     def stats(
         self,
         info: strawberry.Info[GraphQLContext, None],
-        days: Optional[int] = None
+        days: Optional[int] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
     ) -> UserStatsType:
         """Get comprehensive statistics for this user."""
         if not info.context.is_authenticated:
             raise Exception("Authentication required")
 
-        # Build base queries
+        start, end = parse_date_filter(days, start_date, end_date)
+
         message_query = select(func.count(MessageActivity.message_id)).where(
             MessageActivity.user_id == self.user_id
         )
@@ -560,64 +651,61 @@ class UserType:
             ActivityLog.user_id == self.user_id
         )
 
-        # Apply time filter if specified
-        if days:
-            from datetime import timedelta
-            start_date = datetime.utcnow() - timedelta(days=days)
-            message_query = message_query.where(MessageActivity.sent_at >= start_date)
-            voice_query = voice_query.where(VoiceSession.joined_at >= start_date)
-            activity_query = activity_query.where(ActivityLog.started_at >= start_date)
+        if start:
+            message_query = message_query.where(MessageActivity.sent_at >= start)
+            voice_query = voice_query.where(VoiceSession.joined_at >= start)
+            activity_query = activity_query.where(ActivityLog.started_at >= start)
+        if end:
+            message_query = message_query.where(MessageActivity.sent_at <= end)
+            voice_query = voice_query.where(VoiceSession.joined_at <= end)
+            activity_query = activity_query.where(ActivityLog.started_at <= end)
 
-        # Execute queries
         total_messages = info.context.discord_db.exec(message_query).first() or 0
         total_voice_time = info.context.discord_db.exec(voice_query).first() or 0
         total_activities = info.context.discord_db.exec(activity_query).first() or 0
 
-        # Get most active hour
         hour_query = select(
             func.extract('hour', MessageActivity.sent_at).label('hour'),
             func.count(MessageActivity.message_id).label('count')
         ).where(MessageActivity.user_id == self.user_id)
-
-        if days:
-            hour_query = hour_query.where(MessageActivity.sent_at >= start_date)
+        if start:
+            hour_query = hour_query.where(MessageActivity.sent_at >= start)
+        if end:
+            hour_query = hour_query.where(MessageActivity.sent_at <= end)
 
         hour_data = info.context.discord_db.exec(
             hour_query.group_by('hour').order_by(func.count(MessageActivity.message_id).desc()).limit(1)
         ).first()
-
         most_active_hour = int(hour_data.hour) if hour_data else None
 
-        # Get favorite activity
-        activity_query = select(
+        fav_activity_query = select(
             ActivityLog.activity_name,
             func.count(ActivityLog.id).label('count')
         ).where(ActivityLog.user_id == self.user_id)
-
-        if days:
-            activity_query = activity_query.where(ActivityLog.started_at >= start_date)
+        if start:
+            fav_activity_query = fav_activity_query.where(ActivityLog.started_at >= start)
+        if end:
+            fav_activity_query = fav_activity_query.where(ActivityLog.started_at <= end)
 
         activity_data = info.context.discord_db.exec(
-            activity_query.group_by(ActivityLog.activity_name)
+            fav_activity_query.group_by(ActivityLog.activity_name)
             .order_by(func.count(ActivityLog.id).desc()).limit(1)
         ).first()
-
         favorite_activity = activity_data.activity_name if activity_data else None
 
-        # Get most used channel
         channel_query = select(
             MessageActivity.channel_id,
             func.count(MessageActivity.message_id).label('count')
         ).where(MessageActivity.user_id == self.user_id)
-
-        if days:
-            channel_query = channel_query.where(MessageActivity.sent_at >= start_date)
+        if start:
+            channel_query = channel_query.where(MessageActivity.sent_at >= start)
+        if end:
+            channel_query = channel_query.where(MessageActivity.sent_at <= end)
 
         channel_data = info.context.discord_db.exec(
             channel_query.group_by(MessageActivity.channel_id)
             .order_by(func.count(MessageActivity.message_id).desc()).limit(1)
         ).first()
-
         most_used_channel = str(channel_data.channel_id) if channel_data else None
 
         return UserStatsType(
@@ -679,15 +767,26 @@ class HourlyDistributionType:
 
 @strawberry.type
 class TopItemType:
-    """Generic ranked item (channel, activity, user, …)."""
+    """Generic ranked item (channel, activity, …) with count and hours."""
     name: str
     count: int
+    hours: float = 0.0
 
 
 @strawberry.type
 class TopUserType:
-    """Ranked user with ID for linking."""
+    """Ranked user with composite voice-weighted score."""
     user_id: str
     name: str
     message_count: int
     voice_hours: float
+    score: float = 0.0
+
+
+@strawberry.type
+class TopVoiceStateUserType:
+    """User ranked by total hours in a specific voice state."""
+    state_type: VoiceStateTypeEnum
+    user_id: str
+    name: str
+    hours: float
