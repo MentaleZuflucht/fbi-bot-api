@@ -790,3 +790,14 @@ class TopVoiceStateUserType:
     user_id: str
     name: str
     hours: float
+
+
+@strawberry.type
+class VoiceConnectionType:
+    """A pair of users ranked by shared voice channel time."""
+    user1_id: str
+    user1_name: str
+    user2_id: str
+    user2_name: str
+    shared_hours: float
+    session_count: int

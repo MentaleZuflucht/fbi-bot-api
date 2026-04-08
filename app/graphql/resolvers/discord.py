@@ -10,12 +10,13 @@ from typing import Optional, List
 from collections import defaultdict
 import strawberry
 from sqlmodel import select, func, and_, or_
+from sqlalchemy.orm import aliased
 from app.graphql.context import GraphQLContext
 from app.graphql.types.discord import (
     UserType, MessageActivityType, VoiceSessionType, ActivityLogType,
     PresenceStatusLogType, CustomStatusType, ChannelStatsType, ServerStatsType,
     DailyStatsType, HourlyDistributionType, TopItemType, TopUserType,
-    TopVoiceStateUserType,
+    TopVoiceStateUserType, VoiceConnectionType,
     ActivityTypeEnum, MessageTypeEnum, DiscordStatusEnum, VoiceStateTypeEnum,
     parse_date_filter,
 )
@@ -804,6 +805,94 @@ class Query:
                 ))
 
         return results
+
+    @strawberry.field
+    def voice_connections(
+        self,
+        info: strawberry.Info[GraphQLContext, None],
+        limit: int = 20,
+        user_id: Optional[str] = None,
+        days: Optional[int] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ) -> List[VoiceConnectionType]:
+        """Top user pairs ranked by shared voice channel time (overlapping sessions)."""
+        if not info.context.is_authenticated:
+            raise Exception("Authentication required")
+
+        db = info.context.discord_db
+        start, end = parse_date_filter(days, start_date, end_date)
+
+        a = aliased(VoiceSession)
+        b = aliased(VoiceSession)
+
+        overlap_seconds = func.extract(
+            "epoch",
+            func.least(a.left_at, b.left_at) - func.greatest(a.joined_at, b.joined_at),
+        )
+        total_hours = func.sum(overlap_seconds) / 3600
+
+        q = (
+            select(
+                a.user_id.label("user_a_id"),
+                b.user_id.label("user_b_id"),
+                total_hours.label("hours"),
+                func.count().label("cnt"),
+            )
+            .where(
+                and_(
+                    a.channel_id == b.channel_id,
+                    a.user_id < b.user_id,
+                    a.left_at.isnot(None),
+                    b.left_at.isnot(None),
+                    a.joined_at < b.left_at,
+                    b.joined_at < a.left_at,
+                )
+            )
+        )
+
+        if user_id:
+            uid = int(user_id)
+            q = q.where(or_(a.user_id == uid, b.user_id == uid))
+
+        if start:
+            q = q.where(and_(a.joined_at >= start, b.joined_at >= start))
+        if end:
+            q = q.where(and_(a.joined_at <= end, b.joined_at <= end))
+
+        q = q.group_by(a.user_id, b.user_id).order_by(total_hours.desc()).limit(limit)
+
+        rows = db.exec(q).all()
+
+        all_user_ids: set[int] = set()
+        for r in rows:
+            all_user_ids.add(r.user_a_id)
+            all_user_ids.add(r.user_b_id)
+
+        name_map: dict[int, str] = {}
+        if all_user_ids:
+            names = db.exec(
+                select(UserNameHistory).where(
+                    UserNameHistory.user_id.in_(list(all_user_ids)),
+                    UserNameHistory.effective_until.is_(None),
+                )
+            ).all()
+            name_map = {
+                n.user_id: n.global_name or n.display_name or n.username
+                for n in names
+            }
+
+        return [
+            VoiceConnectionType(
+                user1_id=str(r.user_a_id),
+                user1_name=name_map.get(r.user_a_id, str(r.user_a_id)),
+                user2_id=str(r.user_b_id),
+                user2_name=name_map.get(r.user_b_id, str(r.user_b_id)),
+                shared_hours=round(float(r.hours or 0), 1),
+                session_count=r.cnt,
+            )
+            for r in rows
+        ]
 
     @strawberry.field
     def search_users(

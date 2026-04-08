@@ -21,7 +21,7 @@ from app.graphql.types.discord import (
     PresenceStatusLogType, CustomStatusType, UserNameHistoryType,
     ChannelStatsType, ServerStatsType, UserStatsType,
     DailyStatsType, HourlyDistributionType, TopItemType, TopUserType,
-    TopVoiceStateUserType, UniqueActivityType,
+    TopVoiceStateUserType, UniqueActivityType, VoiceConnectionType,
     ActivityTypeEnum, MessageTypeEnum, DiscordStatusEnum, VoiceStateTypeEnum
 )
 from app.graphql.resolvers.discord import Query as DiscordQuery
@@ -227,7 +227,7 @@ schema = strawberry.Schema(
         PresenceStatusLogType, CustomStatusType, UserNameHistoryType,
         ChannelStatsType, ServerStatsType, UserStatsType,
         DailyStatsType, HourlyDistributionType, TopItemType, TopUserType,
-        TopVoiceStateUserType, UniqueActivityType,
+        TopVoiceStateUserType, UniqueActivityType, VoiceConnectionType,
         # Enums
         ActivityTypeEnum, MessageTypeEnum, DiscordStatusEnum, VoiceStateTypeEnum
     ]
