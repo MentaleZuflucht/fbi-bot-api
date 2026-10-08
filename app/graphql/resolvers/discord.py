@@ -345,13 +345,17 @@ class Query:
         return [CustomStatusType.from_model(status) for status in statuses]
 
     @strawberry.field(
-        description="Text channels ranked by number of messages.",
+        description=(
+            "Text channels ranked by number of messages. "
+            "With userId, only that user's messages are counted."
+        ),
         permission_classes=[IsAuthenticated],
     )
     def channel_stats(
         self,
         info: strawberry.Info[GraphQLContext, None],
         channel_id: ChannelId = None,
+        user_id: UserId = None,
         limit: Limit = 10,
         days: Days = None,
         start_date: StartDate = None,
@@ -371,6 +375,8 @@ class Query:
             query = query.where(MessageActivity.sent_at <= end)
         if channel_id:
             query = query.where(MessageActivity.channel_id == int(channel_id))
+        if user_id:
+            query = query.where(MessageActivity.user_id == int(user_id))
 
         query = query.group_by(MessageActivity.channel_id).order_by(
             func.count(MessageActivity.message_id).desc()
