@@ -9,11 +9,12 @@ import logging
 import strawberry
 from strawberry.fastapi import GraphQLRouter
 from typing import Annotated, List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlmodel import select, func
 from app.graphql.arguments import Limit
 from app.graphql.context import (
-    get_graphql_context, GraphQLContext, DBSessionCleanupExtension, LimitCapExtension
+    get_graphql_context, GraphQLContext, DBSessionCleanupExtension, LimitCapExtension,
+    ApiUsageExtension,
 )
 from app.graphql.types.auth import (
     ApiKeyType, ApiUsageType, AuthStatsType, ApiKeyUsageStatsType, UserRoleType,
@@ -99,7 +100,7 @@ class Query(DiscordQuery):
         if not info.context.is_admin:
             raise Exception("Admin access required")
 
-        start_date = datetime.utcnow() - timedelta(days=days)
+        start_date = datetime.now(timezone.utc) - timedelta(days=days)
 
         usage_logs = info.context.auth_db.exec(
             select(ApiUsage, ApiKey.name)
@@ -136,7 +137,7 @@ class Query(DiscordQuery):
         ).first() or 0
 
         # Count requests today
-        today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
         requests_today = info.context.auth_db.exec(
             select(func.count(ApiUsage.id)).where(ApiUsage.timestamp >= today)
         ).first() or 0
@@ -223,7 +224,7 @@ class Mutation:
 schema = strawberry.Schema(
     query=Query,
     mutation=Mutation,
-    extensions=[DBSessionCleanupExtension, LimitCapExtension],
+    extensions=[DBSessionCleanupExtension, LimitCapExtension, ApiUsageExtension],
     types=[
         # Auth types
         ApiKeyType, ApiUsageType, AuthStatsType, ApiKeyUsageStatsType, UserRoleType,

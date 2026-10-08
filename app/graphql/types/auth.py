@@ -6,7 +6,7 @@ API key administration and usage tracking.
 """
 
 from typing import Annotated, Optional
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 import strawberry
 from sqlmodel import select, func
@@ -38,8 +38,7 @@ class ApiKeyType:
         if not info.context.is_admin:
             raise Exception("Admin access required")
 
-        from datetime import timedelta
-        start_date = datetime.utcnow() - timedelta(days=days)
+        start_date = datetime.now(timezone.utc) - timedelta(days=days)
 
         usage_data = info.context.auth_db.exec(
             select(
@@ -78,20 +77,23 @@ class ApiKeyType:
 @strawberry.type(description="Request statistics of one API key.")
 class ApiKeyUsageStatsType:
     total_requests: int
-    error_count: int = strawberry.field(
-        description="Requests that failed (HTTP status 400 or higher)."
-    )
+    error_count: int = strawberry.field(description="Requests that returned errors.")
     success_rate: float = strawberry.field(description="Percentage of successful requests, 0-100.")
 
 
-@strawberry.type(description="One logged API request.")
+@strawberry.type(description=(
+    "One logged API request. Only requests made with an API key are logged, "
+    "not the website's."
+))
 class ApiUsageType:
     id: int
     timestamp: datetime
-    endpoint: str
+    endpoint: str = strawberry.field(
+        description='What was queried, e.g. "/graphql: users, topUsers".'
+    )
     method: str = strawberry.field(description="HTTP method, e.g. POST.")
     response_status: Optional[int] = strawberry.field(
-        description="HTTP status code of the response."
+        description="200 if the request worked, 400 if it returned errors."
     )
     api_key_name: str = strawberry.field(description="Name of the API key that made the request.")
 

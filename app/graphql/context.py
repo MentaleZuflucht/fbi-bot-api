@@ -8,12 +8,14 @@ authenticated user information, and request details.
 import logging
 from typing import Optional
 from fastapi import Request
+from graphql import FieldNode, OperationDefinitionNode
 from sqlmodel import Session
 from strawberry.extensions import SchemaExtension
 from strawberry.fastapi import BaseContext
 
 from app.auth.models import ApiKey
 from app.auth.dependencies import get_current_api_key
+from app.auth.services import AuthService
 from app.auth.database import AuthSessionLocal
 from app.discord.database import DiscordSessionLocal
 
@@ -81,6 +83,38 @@ class LimitCapExtension(SchemaExtension):
         if kwargs.get("limit") is not None:
             kwargs["limit"] = min(kwargs["limit"], MAX_LIMIT)
         return _next(root, info, *args, **kwargs)
+
+
+class ApiUsageExtension(SchemaExtension):
+    """Logs each request made with an API key, for the apiUsage and usageStats queries."""
+
+    async def on_operation(self):
+        yield
+        context = self.execution_context.context
+        api_key = getattr(context, "api_key", None)
+        # The frontend logs in with a virtual key (id 0) that has no row to log against
+        if not api_key or not api_key.id:
+            return
+
+        fields = []
+        document = self.execution_context.graphql_document
+        for definition in document.definitions if document else []:
+            if isinstance(definition, OperationDefinitionNode):
+                fields += [s.name.value for s in definition.selection_set.selections
+                           if isinstance(s, FieldNode)]
+
+        result = self.execution_context.result
+        try:
+            await AuthService.record_api_usage(
+                api_key=api_key,
+                endpoint=f"/graphql: {', '.join(fields)}"[:200],
+                method=context.request.method,
+                response_status=400 if result is None or result.errors else 200,
+                db=context.auth_db,
+            )
+        except Exception:
+            context.auth_db.rollback()
+            logger.warning("Failed to log API usage", exc_info=True)
 
 
 async def get_graphql_context(request: Request) -> GraphQLContext:
