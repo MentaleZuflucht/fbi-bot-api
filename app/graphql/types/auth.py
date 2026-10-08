@@ -11,6 +11,7 @@ from enum import Enum
 import strawberry
 from sqlmodel import select, func
 from app.graphql.context import GraphQLContext
+from app.graphql.permissions import IsAdmin
 from app.auth.models import ApiKey, ApiUsage
 
 
@@ -29,15 +30,15 @@ class ApiKeyType:
     created_at: datetime
     last_used_at: Optional[datetime]
 
-    @strawberry.field(description="Request statistics of this key. Admin only.")
+    @strawberry.field(
+        description="Request statistics of this key. Admin only.",
+        permission_classes=[IsAdmin],
+    )
     def usage_stats(
         self,
         info: strawberry.Info[GraphQLContext, None],
         days: Annotated[int, strawberry.argument(description="Look back this many days.")] = 7
     ) -> "ApiKeyUsageStatsType":
-        if not info.context.is_admin:
-            raise Exception("Admin access required")
-
         start_date = datetime.now(timezone.utc) - timedelta(days=days)
 
         usage_data = info.context.auth_db.exec(

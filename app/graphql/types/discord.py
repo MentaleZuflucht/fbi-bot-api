@@ -234,9 +234,6 @@ class VoiceSessionType:
         self,
         info: strawberry.Info[GraphQLContext, None]
     ) -> List[VoiceStateLogType]:
-        if not info.context.is_authenticated:
-            raise Exception("Authentication required")
-
         voice_states = info.context.discord_db.exec(
             select(VoiceStateLog)
             .where(VoiceStateLog.session_id == self.id)
@@ -397,9 +394,6 @@ class UserType:
         self,
         info: strawberry.Info[GraphQLContext, None]
     ) -> Optional[UserNameHistoryType]:
-        if not info.context.is_authenticated:
-            raise Exception("Authentication required")
-
         current_name = info.context.discord_db.exec(
             select(UserNameHistory)
             .where(UserNameHistory.user_id == self.user_id)
@@ -414,9 +408,6 @@ class UserType:
         info: strawberry.Info[GraphQLContext, None],
         limit: Limit = 10
     ) -> List[UserNameHistoryType]:
-        if not info.context.is_authenticated:
-            raise Exception("Authentication required")
-
         names = info.context.discord_db.exec(
             select(UserNameHistory)
             .where(UserNameHistory.user_id == self.user_id)
@@ -436,9 +427,6 @@ class UserType:
         start_date: StartDate = None,
         end_date: EndDate = None,
     ) -> List[MessageActivityType]:
-        if not info.context.is_authenticated:
-            raise Exception("Authentication required")
-
         query = select(MessageActivity).where(MessageActivity.user_id == self.user_id)
         if channel_id:
             query = query.where(MessageActivity.channel_id == int(channel_id))
@@ -464,9 +452,6 @@ class UserType:
         start_date: StartDate = None,
         end_date: EndDate = None,
     ) -> int:
-        if not info.context.is_authenticated:
-            raise Exception("Authentication required")
-
         query = select(func.count(MessageActivity.message_id)).where(
             MessageActivity.user_id == self.user_id
         )
@@ -491,9 +476,6 @@ class UserType:
         start_date: StartDate = None,
         end_date: EndDate = None,
     ) -> List[VoiceSessionType]:
-        if not info.context.is_authenticated:
-            raise Exception("Authentication required")
-
         query = select(VoiceSession).where(VoiceSession.user_id == self.user_id)
 
         start, end = parse_date_filter(days, start_date, end_date)
@@ -520,9 +502,6 @@ class UserType:
         start_date: StartDate = None,
         end_date: EndDate = None,
     ) -> List[ActivityLogType]:
-        if not info.context.is_authenticated:
-            raise Exception("Authentication required")
-
         query = select(ActivityLog).where(ActivityLog.user_id == self.user_id)
         if activity_type:
             query = query.where(ActivityLog.activity_type == activity_type.value)
@@ -548,9 +527,6 @@ class UserType:
         start_date: StartDate = None,
         end_date: EndDate = None,
     ) -> List[PresenceStatusLogType]:
-        if not info.context.is_authenticated:
-            raise Exception("Authentication required")
-
         query = select(PresenceStatusLog).where(PresenceStatusLog.user_id == self.user_id)
 
         start, end = parse_date_filter(days, start_date, end_date)
@@ -574,9 +550,6 @@ class UserType:
         start_date: StartDate = None,
         end_date: EndDate = None,
     ) -> List[CustomStatusType]:
-        if not info.context.is_authenticated:
-            raise Exception("Authentication required")
-
         query = select(CustomStatus).where(CustomStatus.user_id == self.user_id)
 
         start, end = parse_date_filter(days, start_date, end_date)
@@ -601,9 +574,6 @@ class UserType:
         start_date: StartDate = None,
         end_date: EndDate = None,
     ) -> List[UniqueActivityType]:
-        if not info.context.is_authenticated:
-            raise Exception("Authentication required")
-
         hours_expr = func.coalesce(
             func.sum(
                 case(
@@ -646,9 +616,6 @@ class UserType:
         start_date: StartDate = None,
         end_date: EndDate = None,
     ) -> UserStatsType:
-        if not info.context.is_authenticated:
-            raise Exception("Authentication required")
-
         start, end = parse_date_filter(days, start_date, end_date)
 
         message_query = select(func.count(MessageActivity.message_id)).where(
