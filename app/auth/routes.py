@@ -8,9 +8,7 @@ import secrets
 import time
 from collections import deque
 from datetime import datetime, timedelta, timezone
-from typing import Annotated
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 import jwt
 
@@ -19,7 +17,6 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
-security = HTTPBearer()
 
 # Failed logins are counted across all clients, since behind Cloudflare and the proxy
 # the real client IP is unknown (and IP headers could be spoofed). During an attack
@@ -49,29 +46,6 @@ def create_access_token(data: dict, expires_delta: timedelta) -> str:
     to_encode = data.copy()
     to_encode["exp"] = datetime.now(timezone.utc) + expires_delta
     return jwt.encode(to_encode, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
-
-
-def verify_frontend_token(
-    credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)]
-) -> dict:
-    """Verify JWT token from frontend."""
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-
-    try:
-        token = credentials.credentials
-        payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
-        token_type: str = payload.get("type")
-
-        if token_type != "frontend":
-            raise credentials_exception
-
-        return payload
-    except jwt.InvalidTokenError:
-        raise credentials_exception
 
 
 @router.post("/login", response_model=LoginResponse)
@@ -104,13 +78,3 @@ async def login(request: LoginRequest):
     logger.info("Frontend login successful")
 
     return LoginResponse(access_token=access_token)
-
-
-@router.get("/verify")
-async def verify_token(payload: Annotated[dict, Depends(verify_frontend_token)]):
-    """
-    Verify if a token is valid.
-
-    Useful for checking authentication status.
-    """
-    return {"valid": True, "type": payload.get("type")}

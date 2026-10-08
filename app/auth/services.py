@@ -1,12 +1,8 @@
 """
-Authentication business logic and services.
-
-This module contains all the business logic for authentication,
-API key management, rate limiting, and audit logging.
+API key management and usage logging.
 """
 import logging
-from datetime import datetime, timezone
-from typing import Optional, Dict, Any
+from typing import Optional
 from sqlmodel import Session, select
 
 from app.auth.models import ApiKey, ApiUsage
@@ -16,46 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class AuthService:
-    """Service class for authentication operations."""
-
-    @staticmethod
-    async def authenticate_api_key(api_key: str, db: Session) -> Optional[ApiKey]:
-        """
-        Authenticate an API key.
-
-        Args:
-            api_key: The API key to validate
-            db: Database session
-
-        Returns:
-            ApiKey if valid, None otherwise
-        """
-        try:
-            # Hash the provided key
-            key_hash = ApiKey.hash_key(api_key)
-
-            # Find the API key in database
-            db_api_key = db.exec(
-                select(ApiKey)
-                .where(ApiKey.key_hash == key_hash)
-            ).first()
-
-            if not db_api_key:
-                logger.warning(f"Invalid API key attempt: {api_key[:20]}...")
-                return None
-
-            # Update last used timestamp
-            db_api_key.last_used_at = datetime.now(timezone.utc)
-            db.add(db_api_key)
-            db.commit()
-
-            # Return the API key
-            logger.debug(f"Successfully authenticated API key: {db_api_key.name} (role: {db_api_key.role})")
-            return db_api_key
-
-        except Exception as e:
-            logger.error(f"Error during API key authentication: {e}", exc_info=True)
-            return None
+    """Service class for API key operations."""
 
     @staticmethod
     async def create_api_key(
@@ -150,52 +107,3 @@ class AuthService:
         )
         db.add(usage)
         db.commit()
-
-    @staticmethod
-    async def get_usage_stats(api_key: ApiKey, db: Session, days: int = 7) -> Dict[str, Any]:
-        """
-        Get simple usage statistics for an API key.
-
-        Args:
-            api_key: The API key to get stats for
-            db: Database session
-            days: Number of days to look back
-
-        Returns:
-            dict: Usage statistics
-        """
-        from datetime import timedelta
-
-        now = datetime.now(timezone.utc)
-        start_date = now - timedelta(days=days)
-        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-
-        # Total requests in period
-        total_requests = db.exec(
-            select(ApiUsage)
-            .where(ApiUsage.api_key_id == api_key.id)
-            .where(ApiUsage.timestamp >= start_date)
-        ).count()
-
-        # Requests today
-        requests_today = db.exec(
-            select(ApiUsage)
-            .where(ApiUsage.api_key_id == api_key.id)
-            .where(ApiUsage.timestamp >= today_start)
-        ).count()
-
-        # Error count in period
-        error_requests = db.exec(
-            select(ApiUsage)
-            .where(ApiUsage.api_key_id == api_key.id)
-            .where(ApiUsage.timestamp >= start_date)
-            .where(ApiUsage.response_status >= 400)
-        ).count()
-
-        return {
-            "total_requests": total_requests,
-            "requests_today": requests_today,
-            "error_requests": error_requests,
-            "success_rate": ((total_requests - error_requests) / total_requests * 100) if total_requests else 100.0,
-            "period_days": days
-        }

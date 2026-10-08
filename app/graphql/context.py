@@ -52,11 +52,6 @@ class GraphQLContext(BaseContext):
         """Check if authenticated key has admin privileges."""
         return self.api_key is not None and self.api_key.role == "admin"
 
-    @property
-    def user(self) -> Optional[ApiKey]:
-        """Legacy property for compatibility."""
-        return self.api_key
-
 
 class DBSessionCleanupExtension(SchemaExtension):
     """Closes database sessions stored on the GraphQL context after each request."""

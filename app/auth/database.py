@@ -35,23 +35,6 @@ AuthSessionLocal = sessionmaker(
 )
 
 
-def get_auth_db() -> Session:
-    """
-    Dependency to get auth database session.
-
-    Use this in FastAPI endpoints that need auth database access:
-    """
-    db = AuthSessionLocal()
-    try:
-        logger.debug("Created auth database session")
-        yield db
-    except Exception as e:
-        logger.error(f"Error in auth database session: {e}", exc_info=True)
-        raise
-    finally:
-        db.close()
-        logger.debug("Closed auth database session")
-
 
 def create_auth_tables():
     """

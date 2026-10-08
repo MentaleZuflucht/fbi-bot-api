@@ -18,7 +18,6 @@ class Settings(BaseSettings):
     discord_database_url: str
 
     debug: bool = False
-    log_level: str = "INFO"
 
     # No defaults, so the API refuses to start without real secrets.
     # HS256 needs a key of at least 32 bytes (RFC 7518).
