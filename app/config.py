@@ -2,6 +2,7 @@ import logging
 import logging.config
 import yaml
 from pathlib import Path
+from pydantic import Field
 from pydantic_settings import BaseSettings
 
 
@@ -19,8 +20,10 @@ class Settings(BaseSettings):
     debug: bool = False
     log_level: str = "INFO"
 
-    frontend_password: str = "change_me"
-    jwt_secret_key: str = "change-this-secret-key"
+    # No defaults, so the API refuses to start without real secrets.
+    # HS256 needs a key of at least 32 bytes (RFC 7518).
+    frontend_password: str = Field(min_length=1)
+    jwt_secret_key: str = Field(min_length=32)
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60 * 24  # 1 day
 
