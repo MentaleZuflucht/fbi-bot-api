@@ -66,18 +66,25 @@ class GraphQLContext(BaseContext):
 
 
 class DBSessionCleanupExtension(SchemaExtension):
-    """Closes database sessions stored on the GraphQL context after each request."""
+    """Closes database sessions stored on the GraphQL context after each request.
 
-    def on_request_end(self):
-        context = self.execution_context.context
-        for attr in ("auth_db", "discord_db"):
-            db = getattr(context, attr, None)
-            if db is not None:
-                try:
-                    db.close()
-                    logger.debug("Closed %s session via extension cleanup", attr)
-                except Exception:
-                    logger.warning("Failed to close %s session", attr, exc_info=True)
+    Without this the connections stay "idle in transaction", holding locks that
+    block migrations, until the connection pool runs out.
+    """
+
+    def on_operation(self):
+        try:
+            yield
+        finally:
+            context = self.execution_context.context
+            for attr in ("auth_db", "discord_db"):
+                db = getattr(context, attr, None)
+                if db is not None:
+                    try:
+                        db.close()
+                        logger.debug("Closed %s session via extension cleanup", attr)
+                    except Exception:
+                        logger.warning("Failed to close %s session", attr, exc_info=True)
 
 
 MAX_LIMIT = 5000
@@ -129,7 +136,7 @@ async def get_graphql_context(request: Request) -> GraphQLContext:
     Create GraphQL context for each request.
 
     Sessions created here are guaranteed to be closed by
-    DBSessionCleanupExtension.on_request_end after the request completes.
+    DBSessionCleanupExtension after the request completes.
     """
     auth_db = AuthSessionLocal()
     discord_db = DiscordSessionLocal()
