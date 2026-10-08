@@ -5,6 +5,8 @@ Simple password-based authentication that issues JWT tokens for the frontend.
 """
 import logging
 import secrets
+import time
+from collections import deque
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -18,6 +20,19 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 security = HTTPBearer()
+
+# Failed logins are counted across all clients, since behind Cloudflare and the proxy
+# the real client IP is unknown (and IP headers could be spoofed). During an attack
+# this also blocks real users for up to a minute; logged-in users are not affected.
+MAX_FAILED_LOGINS_PER_MINUTE = 10
+_failed_logins: deque[float] = deque()
+
+
+def _too_many_failed_logins() -> bool:
+    cutoff = time.monotonic() - 60
+    while _failed_logins and _failed_logins[0] < cutoff:
+        _failed_logins.popleft()
+    return len(_failed_logins) >= MAX_FAILED_LOGINS_PER_MINUTE
 
 
 class LoginRequest(BaseModel):
@@ -66,7 +81,15 @@ async def login(request: LoginRequest):
 
     Validates password and returns a JWT token for accessing the GraphQL API.
     """
+    if _too_many_failed_logins():
+        logger.warning("Login blocked, too many failed attempts")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many failed login attempts, try again in a minute"
+        )
+
     if not secrets.compare_digest(request.password.encode(), settings.frontend_password.encode()):
+        _failed_logins.append(time.monotonic())
         logger.warning("Failed login attempt")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
