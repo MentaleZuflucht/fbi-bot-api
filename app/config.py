@@ -3,13 +3,15 @@ import logging.config
 import yaml
 from pathlib import Path
 from pydantic import Field
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     """
     Application settings loaded from environment variables.
     """
+
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=False)
 
     app_name: str = "FBI Bot API"
     app_version: str = "4.2.0"
@@ -25,10 +27,6 @@ class Settings(BaseSettings):
     jwt_secret_key: str = Field(min_length=32)
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60 * 24  # 1 day
-
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
 
 
 class CustomFormatter(logging.Formatter):
