@@ -18,12 +18,12 @@ from app.graphql.types.discord import (
     UserType, MessageActivityType, VoiceSessionType, ActivityLogType,
     PresenceStatusLogType, CustomStatusType, ChannelStatsType, ServerStatsType,
     DailyStatsType, HourlyDistributionType, TopItemType, TopUserType,
-    TopVoiceStateUserType, VoiceConnectionType,
+    TopVoiceStateUserType, VoiceConnectionType, ChannelType,
     ActivityTypeEnum, MessageTypeEnum, DiscordStatusEnum, VoiceStateTypeEnum,
     parse_date_filter,
 )
 from app.discord.models import (
-    User, MessageActivity, VoiceSession, VoiceStateLog, ActivityLog,
+    User, Channel, MessageActivity, VoiceSession, VoiceStateLog, ActivityLog,
     PresenceStatusLog, CustomStatus, UserNameHistory
 )
 
@@ -601,7 +601,8 @@ class Query:
     @strawberry.field(
         description=(
             "Voice channels ranked by total hours spent in them. "
-            "name is the channel ID, count the number of visits. Only finished visits count."
+            "name is the channel name (or its ID if unknown), count the number of visits. "
+            "Only finished visits count."
         ),
         permission_classes=[IsAuthenticated],
     )
@@ -640,7 +641,7 @@ class Query:
         ).all()
         return [
             TopItemType(
-                name=str(r.channel_id),
+                name=info.context.channel_name(r.channel_id) or str(r.channel_id),
                 count=r.cnt,
                 hours=round(float(r.hours or 0), 2),
             )
@@ -937,6 +938,22 @@ class Query:
             )
             for r in rows
         ]
+
+    @strawberry.field(
+        description="All channels and threads the bot has seen, sorted by name.",
+        permission_classes=[IsAuthenticated],
+    )
+    def channels(
+        self,
+        info: strawberry.Info[GraphQLContext, None],
+        include_deleted: Annotated[bool, strawberry.argument(
+            description="Also include deleted channels."
+        )] = False,
+    ) -> List[ChannelType]:
+        query = select(Channel).order_by(Channel.name)
+        if not include_deleted:
+            query = query.where(Channel.deleted_at.is_(None))
+        return [ChannelType.from_model(channel) for channel in info.context.discord_db.exec(query).all()]
 
     @strawberry.field(
         description=(

@@ -14,7 +14,7 @@ from sqlalchemy import case
 from app.graphql.arguments import Limit, ChannelId, Days, StartDate, EndDate
 from app.graphql.context import GraphQLContext
 from app.discord.models import (
-    User, MessageActivity, VoiceSession, VoiceStateLog,
+    User, Channel, MessageActivity, VoiceSession, VoiceStateLog,
     PresenceStatusLog, ActivityLog, CustomStatus, UserNameHistory
 )
 
@@ -167,6 +167,10 @@ class MessageActivityType:
     )
     sent_at: datetime
 
+    @strawberry.field(description="Channel name. null if the bot never saw the channel.")
+    def channel_name(self, info: strawberry.Info[GraphQLContext, None]) -> Optional[str]:
+        return info.context.channel_name(self.channel_id)
+
     @classmethod
     def from_model(cls, message: MessageActivity) -> "MessageActivityType":
         """Create GraphQL type from database model."""
@@ -241,6 +245,10 @@ class VoiceSessionType:
     @strawberry.field(description="Whether the user is still in the channel.")
     def is_ongoing(self) -> bool:
         return self.left_at is None
+
+    @strawberry.field(description="Channel name. null if the bot never saw the channel.")
+    def channel_name(self, info: strawberry.Info[GraphQLContext, None]) -> Optional[str]:
+        return info.context.channel_name(self.channel_id)
 
     @strawberry.field(description="Muting, streaming etc. during this visit, in order.")
     def voice_states(
@@ -393,6 +401,10 @@ class UserStatsType:
     most_used_channel: Optional[str] = strawberry.field(
         description="ID of the channel the user sends the most messages in."
     )
+
+    @strawberry.field(description="Name of the channel the user sends the most messages in.")
+    def most_used_channel_name(self, info: strawberry.Info[GraphQLContext, None]) -> Optional[str]:
+        return info.context.channel_name(self.most_used_channel) if self.most_used_channel else None
 
 
 @strawberry.type(
@@ -732,6 +744,32 @@ class UserType:
         )
 
 
+@strawberry.type(name="Channel", description="A Discord channel or thread.")
+class ChannelType:
+    channel_id: str = strawberry.field(description="Discord channel ID.")
+    name: str
+    channel_type: str = strawberry.field(
+        description="Discord channel type, e.g. text, voice, stage_voice, category, public_thread."
+    )
+    parent_id: Optional[str] = strawberry.field(
+        description="Category of a channel, or the channel a thread belongs to."
+    )
+    deleted_at: Optional[datetime] = strawberry.field(
+        description="When the channel was deleted. null if it still exists."
+    )
+
+    @classmethod
+    def from_model(cls, channel: Channel) -> "ChannelType":
+        """Create GraphQL type from database model."""
+        return cls(
+            channel_id=str(channel.channel_id),
+            name=channel.name,
+            channel_type=channel.channel_type,
+            parent_id=str(channel.parent_id) if channel.parent_id else None,
+            deleted_at=channel.deleted_at,
+        )
+
+
 # Statistics Types
 @strawberry.type(name="ChannelStats", description="Message statistics of one text channel.")
 class ChannelStatsType:
@@ -741,6 +779,10 @@ class ChannelStatsType:
     most_active_user_id: Optional[str] = strawberry.field(
         description="ID of the user who wrote the most."
     )
+
+    @strawberry.field(description="Channel name. null if the bot never saw the channel.")
+    def channel_name(self, info: strawberry.Info[GraphQLContext, None]) -> Optional[str]:
+        return info.context.channel_name(self.channel_id)
 
 
 @strawberry.type(name="ServerStats", description="Totals for the whole server.")
@@ -759,6 +801,12 @@ class ServerStatsType:
     most_common_activity: Optional[str] = strawberry.field(
         description="Activity started most often."
     )
+
+    @strawberry.field(description="Name of the text channel with the most messages.")
+    def most_active_channel_name(self, info: strawberry.Info[GraphQLContext, None]) -> Optional[str]:
+        if not self.most_active_channel_id:
+            return None
+        return info.context.channel_name(self.most_active_channel_id)
 
 
 @strawberry.type(name="DailyStats", description="Activity on one day.")

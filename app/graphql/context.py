@@ -9,7 +9,7 @@ import logging
 from typing import Optional
 from fastapi import Request
 from graphql import FieldNode, OperationDefinitionNode
-from sqlmodel import Session
+from sqlmodel import Session, select
 from strawberry.extensions import SchemaExtension
 from strawberry.fastapi import BaseContext
 
@@ -18,6 +18,7 @@ from app.auth.dependencies import get_current_api_key
 from app.auth.services import AuthService
 from app.auth.database import AuthSessionLocal
 from app.discord.database import DiscordSessionLocal
+from app.discord.models import Channel
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,17 @@ class GraphQLContext(BaseContext):
         self.api_key = api_key
         self.auth_db = auth_db
         self.discord_db = discord_db
+        self._channel_names: Optional[dict[int, str]] = None
+
+    def channel_name(self, channel_id) -> Optional[str]:
+        """Name of a channel, or None if the bot never saw it.
+
+        The channels table is small, so it's loaded once per request instead of
+        querying it for every message or voice session.
+        """
+        if self._channel_names is None:
+            self._channel_names = dict(self.discord_db.exec(select(Channel.channel_id, Channel.name)).all())
+        return self._channel_names.get(int(channel_id))
 
     @property
     def is_authenticated(self) -> bool:
