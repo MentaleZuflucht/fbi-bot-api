@@ -616,7 +616,7 @@ class UserType:
         return [
             UniqueActivityType(
                 activity_name=r.activity_name,
-                total_hours=round(float(r.hours or 0), 1),
+                total_hours=round(float(r.hours or 0), 2),
                 count=r.cnt,
             )
             for r in results

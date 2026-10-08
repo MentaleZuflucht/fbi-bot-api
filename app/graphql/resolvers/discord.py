@@ -611,7 +611,7 @@ class Query:
             TopItemType(
                 name=str(r.channel_id),
                 count=r.cnt,
-                hours=round(float(r.hours or 0), 1),
+                hours=round(float(r.hours or 0), 2),
             )
             for r in rows
         ]
@@ -658,7 +658,7 @@ class Query:
             TopItemType(
                 name=r.activity_name,
                 count=r.cnt,
-                hours=round(float(r.hours or 0), 1),
+                hours=round(float(r.hours or 0), 2),
             )
             for r in rows
         ]
@@ -728,7 +728,7 @@ class Query:
                 user_id=str(uid),
                 name=name_map.get(uid, str(uid)),
                 message_count=msgs,
-                voice_hours=round(hours, 1),
+                voice_hours=round(hours, 2),
                 score=round(score, 1),
             )
             for uid, msgs, hours, score in scored
@@ -801,7 +801,7 @@ class Query:
                     state_type=VoiceStateTypeEnum(st_val),
                     user_id=str(r.user_id),
                     name=name_map.get(r.user_id, str(r.user_id)),
-                    hours=round(float(r.hours or 0), 1),
+                    hours=round(float(r.hours or 0), 2),
                 ))
 
         return results
@@ -888,7 +888,7 @@ class Query:
                 user1_name=name_map.get(r.user_a_id, str(r.user_a_id)),
                 user2_id=str(r.user_b_id),
                 user2_name=name_map.get(r.user_b_id, str(r.user_b_id)),
-                shared_hours=round(float(r.hours or 0), 1),
+                shared_hours=round(float(r.hours or 0), 2),
                 session_count=r.cnt,
             )
             for r in rows
