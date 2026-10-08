@@ -11,7 +11,9 @@ from strawberry.fastapi import GraphQLRouter
 from typing import List
 from datetime import datetime, timedelta
 from sqlmodel import select, func
-from app.graphql.context import get_graphql_context, GraphQLContext, DBSessionCleanupExtension
+from app.graphql.context import (
+    get_graphql_context, GraphQLContext, DBSessionCleanupExtension, LimitCapExtension
+)
 from app.graphql.types.auth import (
     ApiKeyType, ApiUsageType, AuthStatsType, ApiKeyUsageStatsType, UserRoleType,
     CreateApiKeyResult
@@ -218,7 +220,7 @@ class Mutation:
 schema = strawberry.Schema(
     query=Query,
     mutation=Mutation,
-    extensions=[DBSessionCleanupExtension],
+    extensions=[DBSessionCleanupExtension, LimitCapExtension],
     types=[
         # Auth types
         ApiKeyType, ApiUsageType, AuthStatsType, ApiKeyUsageStatsType, UserRoleType,

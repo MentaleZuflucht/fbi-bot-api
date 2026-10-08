@@ -71,6 +71,18 @@ class DBSessionCleanupExtension(SchemaExtension):
                     logger.warning("Failed to close %s session", attr, exc_info=True)
 
 
+MAX_LIMIT = 5000
+
+
+class LimitCapExtension(SchemaExtension):
+    """Caps every `limit` argument, so a single query can't load millions of rows."""
+
+    def resolve(self, _next, root, info, *args, **kwargs):
+        if kwargs.get("limit") is not None:
+            kwargs["limit"] = min(kwargs["limit"], MAX_LIMIT)
+        return _next(root, info, *args, **kwargs)
+
+
 async def get_graphql_context(request: Request) -> GraphQLContext:
     """
     Create GraphQL context for each request.
