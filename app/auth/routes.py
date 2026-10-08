@@ -4,6 +4,7 @@ Authentication routes for frontend access.
 Simple password-based authentication that issues JWT tokens for the frontend.
 """
 import logging
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -65,7 +66,7 @@ async def login(request: LoginRequest):
 
     Validates password and returns a JWT token for accessing the GraphQL API.
     """
-    if request.password != settings.frontend_password:
+    if not secrets.compare_digest(request.password.encode(), settings.frontend_password.encode()):
         logger.warning("Failed login attempt")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
