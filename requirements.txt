@@ -5,26 +5,17 @@ uvicorn>=0.42.0
 # Database
 SQLModel>=0.0.37
 SQLAlchemy>=2.0.48
-asyncpg>=0.31.0
 psycopg2-binary>=2.9.11
 
 # GraphQL
 strawberry-graphql[fastapi]>=0.312.0
 
 # Authentication & Security
-passlib>=1.7.4
 PyJWT>=2.12.1
-python-multipart>=0.0.22
 
 # Environment Variables
 python-dotenv>=1.2.2
 pydantic-settings>=2.13.1
 
-# Email validation
-email-validator>=2.3.0
-
 # Logging
 PyYAML>=6.0.3
-
-# Development
-httpx>=0.28.1
