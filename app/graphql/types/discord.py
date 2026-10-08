@@ -6,7 +6,7 @@ messages, voice sessions, and other Discord-related data.
 """
 
 from typing import Annotated, Optional, List, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 import strawberry
 from sqlmodel import select, func, and_
@@ -33,7 +33,7 @@ def parse_date_filter(
     if end_date:
         end = datetime.fromisoformat(end_date).replace(hour=23, minute=59, second=59)
     if start is None and days is not None:
-        start = datetime.utcnow() - timedelta(days=days)
+        start = datetime.now(timezone.utc) - timedelta(days=days)
     return start, end
 
 
