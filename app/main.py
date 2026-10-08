@@ -9,8 +9,6 @@ import time
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.trustedhost import TrustedHostMiddleware
-import uvicorn
 from app.config import settings, setup_logging
 from app.auth.database import create_auth_tables, init_default_admin_key
 from app.auth.routes import router as auth_router
@@ -84,14 +82,8 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
-)
-
-app.add_middleware(
-    TrustedHostMiddleware,
-    allowed_hosts=["*"]
 )
 
 
@@ -164,9 +156,3 @@ async def health_check():
         "version": settings.app_version,
         "environment": "development" if settings.debug else "production"
     }
-
-
-if __name__ == "__main__":
-    log_config = uvicorn.config.LOGGING_CONFIG
-    log_config["formatters"]["default"]["fmt"] = "%(asctime)s [%(levelname)-8s] %(name)s: %(message)s"
-    log_config["formatters"]["access"]["fmt"] = "%(asctime)s [%(levelname)-8s] %(name)s: %(message)s"
