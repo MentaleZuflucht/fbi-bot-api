@@ -419,7 +419,7 @@ class UserType:
     ) -> Optional[UserNameHistoryType]:
         current_name = info.context.discord_db.exec(
             select(UserNameHistory)
-            .where(UserNameHistory.user_id == self.user_id)
+            .where(UserNameHistory.user_id == int(self.user_id))
             .where(UserNameHistory.effective_until.is_(None))
         ).first()
 
@@ -433,7 +433,7 @@ class UserType:
     ) -> List[UserNameHistoryType]:
         names = info.context.discord_db.exec(
             select(UserNameHistory)
-            .where(UserNameHistory.user_id == self.user_id)
+            .where(UserNameHistory.user_id == int(self.user_id))
             .order_by(UserNameHistory.effective_from.desc())
             .limit(limit)
         ).all()
@@ -450,7 +450,7 @@ class UserType:
         start_date: StartDate = None,
         end_date: EndDate = None,
     ) -> List[MessageActivityType]:
-        query = select(MessageActivity).where(MessageActivity.user_id == self.user_id)
+        query = select(MessageActivity).where(MessageActivity.user_id == int(self.user_id))
         if channel_id:
             query = query.where(MessageActivity.channel_id == int(channel_id))
 
@@ -476,7 +476,7 @@ class UserType:
         end_date: EndDate = None,
     ) -> int:
         query = select(func.count(MessageActivity.message_id)).where(
-            MessageActivity.user_id == self.user_id
+            MessageActivity.user_id == int(self.user_id)
         )
         if channel_id:
             query = query.where(MessageActivity.channel_id == int(channel_id))
@@ -499,7 +499,7 @@ class UserType:
         start_date: StartDate = None,
         end_date: EndDate = None,
     ) -> List[VoiceSessionType]:
-        query = select(VoiceSession).where(VoiceSession.user_id == self.user_id)
+        query = select(VoiceSession).where(VoiceSession.user_id == int(self.user_id))
 
         start, end = parse_date_filter(days, start_date, end_date)
         if start:
@@ -525,7 +525,7 @@ class UserType:
         start_date: StartDate = None,
         end_date: EndDate = None,
     ) -> List[ActivityLogType]:
-        query = select(ActivityLog).where(ActivityLog.user_id == self.user_id)
+        query = select(ActivityLog).where(ActivityLog.user_id == int(self.user_id))
         if activity_type:
             query = query.where(ActivityLog.activity_type == activity_type.value)
 
@@ -550,7 +550,7 @@ class UserType:
         start_date: StartDate = None,
         end_date: EndDate = None,
     ) -> List[PresenceStatusLogType]:
-        query = select(PresenceStatusLog).where(PresenceStatusLog.user_id == self.user_id)
+        query = select(PresenceStatusLog).where(PresenceStatusLog.user_id == int(self.user_id))
 
         start, end = parse_date_filter(days, start_date, end_date)
         if start:
@@ -573,7 +573,7 @@ class UserType:
         start_date: StartDate = None,
         end_date: EndDate = None,
     ) -> List[CustomStatusType]:
-        query = select(CustomStatus).where(CustomStatus.user_id == self.user_id)
+        query = select(CustomStatus).where(CustomStatus.user_id == int(self.user_id))
 
         start, end = parse_date_filter(days, start_date, end_date)
         if start:
@@ -611,7 +611,7 @@ class UserType:
             ActivityLog.activity_name,
             func.count(ActivityLog.id).label("cnt"),
             hours_expr.label("hours"),
-        ).where(ActivityLog.user_id == self.user_id)
+        ).where(ActivityLog.user_id == int(self.user_id))
 
         start, end = parse_date_filter(days, start_date, end_date)
         if start:
@@ -642,18 +642,18 @@ class UserType:
         start, end = parse_date_filter(days, start_date, end_date)
 
         message_query = select(func.count(MessageActivity.message_id)).where(
-            MessageActivity.user_id == self.user_id
+            MessageActivity.user_id == int(self.user_id)
         )
         voice_query = select(func.sum(
             func.extract('epoch', VoiceSession.left_at - VoiceSession.joined_at) / 60
         )).where(
             and_(
-                VoiceSession.user_id == self.user_id,
+                VoiceSession.user_id == int(self.user_id),
                 VoiceSession.left_at.isnot(None)
             )
         )
         activity_query = select(func.count(ActivityLog.id)).where(
-            ActivityLog.user_id == self.user_id
+            ActivityLog.user_id == int(self.user_id)
         )
 
         if start:
@@ -672,7 +672,7 @@ class UserType:
         hour_query = select(
             func.extract('hour', MessageActivity.sent_at).label('hour'),
             func.count(MessageActivity.message_id).label('count')
-        ).where(MessageActivity.user_id == self.user_id)
+        ).where(MessageActivity.user_id == int(self.user_id))
         if start:
             hour_query = hour_query.where(MessageActivity.sent_at >= start)
         if end:
@@ -686,7 +686,7 @@ class UserType:
         fav_activity_query = select(
             ActivityLog.activity_name,
             func.count(ActivityLog.id).label('count')
-        ).where(ActivityLog.user_id == self.user_id)
+        ).where(ActivityLog.user_id == int(self.user_id))
         if start:
             fav_activity_query = fav_activity_query.where(ActivityLog.started_at >= start)
         if end:
@@ -701,7 +701,7 @@ class UserType:
         channel_query = select(
             MessageActivity.channel_id,
             func.count(MessageActivity.message_id).label('count')
-        ).where(MessageActivity.user_id == self.user_id)
+        ).where(MessageActivity.user_id == int(self.user_id))
         if start:
             channel_query = channel_query.where(MessageActivity.sent_at >= start)
         if end:
