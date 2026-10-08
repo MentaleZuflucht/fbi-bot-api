@@ -11,7 +11,7 @@ import strawberry
 from app.graphql.context import MAX_LIMIT
 
 Limit = Annotated[int, strawberry.argument(
-    description=f"Maximum number of results (at most {MAX_LIMIT})."
+    description=f"Maximum number of results. Values above {MAX_LIMIT} are lowered to {MAX_LIMIT}."
 )]
 Offset = Annotated[int, strawberry.argument(
     description="Number of results to skip, for paging through long lists."
@@ -30,4 +30,7 @@ StartDate = Annotated[Optional[str], strawberry.argument(
 )]
 EndDate = Annotated[Optional[str], strawberry.argument(
     description='Only include data up to and including this day (UTC), e.g. "2026-01-31".'
+)]
+KeyId = Annotated[int, strawberry.argument(
+    description="ID of the API key, as in ApiKey.id."
 )]

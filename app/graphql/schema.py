@@ -5,13 +5,15 @@ This module creates the main GraphQL schema that combines all types and resolver
 and sets up the FastAPI GraphQL endpoint with authentication.
 """
 
+import dataclasses
 import logging
 import strawberry
 from strawberry.fastapi import GraphQLRouter
+from strawberry.schema.types.base_scalars import DateTimeDefinition
 from typing import Annotated, List
 from datetime import datetime, timedelta, timezone
 from sqlmodel import select, func
-from app.graphql.arguments import Limit
+from app.graphql.arguments import Limit, KeyId
 from app.graphql.permissions import IsAdmin, IsAuthenticated
 from app.graphql.context import (
     get_graphql_context, GraphQLContext, DBSessionCleanupExtension, LimitCapExtension,
@@ -44,10 +46,15 @@ Every request needs your API key as a header: `{"Authorization": "Bearer sk_live
 - IDs are strings, because Discord IDs are too big for GraphQL's Int.
 - All times are UTC.
 - Durations in hours are rounded to 2 decimals.
-- Date filters: use `days` for "the last N days", or `startDate`/`endDate` for a fixed range.""")
+- Date filters: use `days` for "the last N days", or `startDate`/`endDate` for a fixed range.
+- Errors, like a missing key or a field that needs an admin key, are listed under \
+`errors` in the response, and the data they affect is null.""")
 class Query(DiscordQuery):
     @strawberry.field(
-        description="Says hello with the name of your API key. Handy to check that your key works."
+        description=(
+            "Says hello with the name of your API key. Handy to check that your key works. "
+            "Works without a key too, then it tells you to authenticate."
+        )
     )
     def hello(self, info: strawberry.Info[GraphQLContext, None]) -> str:
         if not info.context.is_authenticated:
@@ -74,13 +81,13 @@ class Query(DiscordQuery):
         return [ApiKeyType.from_model(key) for key in keys]
 
     @strawberry.field(
-        description="One API key by its ID. Admin only.",
+        description="One API key by its ID. Returns an error if it doesn't exist. Admin only.",
         permission_classes=[IsAdmin],
     )
     def api_key(
         self,
         info: strawberry.Info[GraphQLContext, None],
-        key_id: int
+        key_id: KeyId
     ) -> ApiKeyType:
         key = info.context.auth_db.exec(
             select(ApiKey).where(ApiKey.id == key_id)
@@ -193,13 +200,16 @@ class Mutation:
         )
 
     @strawberry.mutation(
-        description="Delete an API key for good. You can't delete your own key. Admin only.",
+        description=(
+            "Delete an API key for good. Returns true if it was deleted. "
+            "You can't delete your own key. Admin only."
+        ),
         permission_classes=[IsAdmin],
     )
     async def revoke_api_key(
         self,
         info: strawberry.Info[GraphQLContext, None],
-        key_id: int
+        key_id: KeyId
     ) -> bool:
         if info.context.api_key.id == key_id:
             raise Exception("Cannot revoke your own API key")
@@ -219,10 +229,20 @@ class Mutation:
         return revoked
 
 
+# Strawberry's DateTime only says "Date with time (isoformat)"
+DateTimeScalar = dataclasses.replace(
+    DateTimeDefinition,
+    description=(
+        'Date and time in ISO 8601 format, e.g. "2026-01-31T18:30:00+00:00". '
+        "Times without a UTC offset are UTC."
+    ),
+)
+
 # Create the GraphQL schema
 schema = strawberry.Schema(
     query=Query,
     mutation=Mutation,
+    scalar_overrides={datetime: DateTimeScalar},
     extensions=[DBSessionCleanupExtension, LimitCapExtension, ApiUsageExtension],
     types=[
         # Auth types
@@ -238,8 +258,50 @@ schema = strawberry.Schema(
     ]
 )
 
+# Shown in GraphiQL's editor on first visit, instead of Strawberry's generic welcome.
+# It goes into a JavaScript template literal, so it must not contain backticks or "${".
+GRAPHIQL_WELCOME_QUERY = """# Welcome to the FBI Bot API!
+#
+# 1. Paste your API key in the Headers tab below:
+#      {"Authorization": "Bearer sk_live_..."}
+# 2. Press Ctrl+Enter (or the play button) to run the query below.
+# 3. Click the book icon on the left to see every query and field.
+#    The GraphiQL Explorer, also on the left, lets you click queries together.
+#
+# Ctrl+Space shows suggestions while typing.
+
+query Welcome {
+  hello
+  serverStats(days: 7) {
+    totalMessages
+    totalVoiceTimeHours
+    mostActiveChannelName
+  }
+  topUsers(days: 7, limit: 5) {
+    name
+    score
+  }
+}
+"""
+
+
+class DocumentedGraphQLRouter(GraphQLRouter):
+    """GraphQLRouter whose GraphiQL opens with GRAPHIQL_WELCOME_QUERY."""
+
+    @property
+    def graphql_ide_html(self) -> str:
+        html = super().graphql_ide_html
+        start = html.find("const EXAMPLE_QUERY = `")
+        if start == -1:
+            # A newer Strawberry changed its template, keep its welcome text
+            return html
+        start += len("const EXAMPLE_QUERY = `")
+        end = html.index("`;", start)
+        return html[:start] + GRAPHIQL_WELCOME_QUERY + html[end:]
+
+
 # Create the FastAPI GraphQL router
-graphql_app = GraphQLRouter(
+graphql_app = DocumentedGraphQLRouter(
     schema,
     context_getter=get_graphql_context,
     graphql_ide="graphiql"

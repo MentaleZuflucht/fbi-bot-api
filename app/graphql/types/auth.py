@@ -26,12 +26,14 @@ class UserRoleType(Enum):
     description="An API key. The full key is never shown again after creating it.",
 )
 class ApiKeyType:
-    id: int
+    id: int = strawberry.field(description="ID of the key, for apiKey and revokeApiKey.")
     name: str = strawberry.field(description="Who the key is for.")
     key_prefix: str = strawberry.field(description="Start of the key, to recognize it.")
-    role: UserRoleType
-    created_at: datetime
-    last_used_at: Optional[datetime]
+    role: UserRoleType = strawberry.field(description="What the key may do.")
+    created_at: datetime = strawberry.field(description="When the key was created.")
+    last_used_at: Optional[datetime] = strawberry.field(
+        description="When the key was last used. null if it was never used."
+    )
 
     @strawberry.field(
         description="Request statistics of this key. Admin only.",
@@ -80,9 +82,11 @@ class ApiKeyType:
 
 @strawberry.type(name="ApiKeyUsageStats", description="Request statistics of one API key.")
 class ApiKeyUsageStatsType:
-    total_requests: int
+    total_requests: int = strawberry.field(description="Number of requests made with the key.")
     error_count: int = strawberry.field(description="Requests that returned errors.")
-    success_rate: float = strawberry.field(description="Percentage of successful requests, 0-100.")
+    success_rate: float = strawberry.field(
+        description="Percentage of successful requests, 0-100. 100 if there were no requests."
+    )
 
 
 @strawberry.type(name="ApiUsage", description=(
@@ -90,8 +94,8 @@ class ApiKeyUsageStatsType:
     "not the website's."
 ))
 class ApiUsageType:
-    id: int
-    timestamp: datetime
+    id: int = strawberry.field(description="Internal ID of this entry.")
+    timestamp: datetime = strawberry.field(description="When the request was made.")
     endpoint: str = strawberry.field(
         description='What was queried, e.g. "/graphql: users, topUsers".'
     )
@@ -116,19 +120,19 @@ class ApiUsageType:
 
 @strawberry.type(name="AuthStats", description="Overview of API keys and requests.")
 class AuthStatsType:
-    total_api_keys: int
-    admin_keys: int
-    read_keys: int
+    total_api_keys: int = strawberry.field(description="Number of API keys.")
+    admin_keys: int = strawberry.field(description="Number of keys with the ADMIN role.")
+    read_keys: int = strawberry.field(description="Number of keys with the READ role.")
     total_requests_today: int = strawberry.field(description="Requests since midnight UTC.")
 
 
 @strawberry.type(description="A newly created API key.")
 class CreateApiKeyResult:
-    id: int
-    name: str
-    key_prefix: str
-    role: UserRoleType
-    created_at: datetime
+    id: int = strawberry.field(description="ID of the new key, for apiKey and revokeApiKey.")
+    name: str = strawberry.field(description="Who the key is for.")
+    key_prefix: str = strawberry.field(description="Start of the key, to recognize it later.")
+    role: UserRoleType = strawberry.field(description="What the key may do.")
+    created_at: datetime = strawberry.field(description="When the key was created.")
     api_key: str = strawberry.field(
         description="The full key. It is only shown this once, so save it now."
     )

@@ -43,46 +43,114 @@ def parse_date_filter(
     "most others are system messages."
 ))
 class MessageTypeEnum(Enum):
-    DEFAULT = "default"
-    RECIPIENT_ADD = "recipient_add"
-    RECIPIENT_REMOVE = "recipient_remove"
-    CALL = "call"
-    CHANNEL_NAME_CHANGE = "channel_name_change"
-    CHANNEL_ICON_CHANGE = "channel_icon_change"
-    CHANNEL_PINNED_MESSAGE = "channel_pinned_message"
-    USER_JOIN = "user_join"
-    GUILD_BOOST = "guild_boost"
-    GUILD_BOOST_TIER_1 = "guild_boost_tier_1"
-    GUILD_BOOST_TIER_2 = "guild_boost_tier_2"
-    GUILD_BOOST_TIER_3 = "guild_boost_tier_3"
-    CHANNEL_FOLLOW_ADD = "channel_follow_add"
-    GUILD_STREAM = "guild_stream"
-    GUILD_DISCOVERY_DISQUALIFIED = "guild_discovery_disqualified"
-    GUILD_DISCOVERY_REQUALIFIED = "guild_discovery_requalified"
-    GUILD_DISCOVERY_GRACE_PERIOD_INITIAL_WARNING = "guild_discovery_grace_period_initial_warning"
-    GUILD_DISCOVERY_GRACE_PERIOD_FINAL_WARNING = "guild_discovery_grace_period_final_warning"
-    THREAD_CREATED = "thread_created"
-    REPLY = "reply"
-    CHAT_INPUT_COMMAND = "chat_input_command"
-    THREAD_STARTER_MESSAGE = "thread_starter_message"
-    GUILD_INVITE_REMINDER = "guild_invite_reminder"
-    CONTEXT_MENU_COMMAND = "context_menu_command"
-    AUTO_MODERATION_ACTION = "auto_moderation_action"
-    ROLE_SUBSCRIPTION_PURCHASE = "role_subscription_purchase"
-    INTERACTION_PREMIUM_UPSELL = "interaction_premium_upsell"
-    STAGE_START = "stage_start"
-    STAGE_END = "stage_end"
-    STAGE_SPEAKER = "stage_speaker"
-    STAGE_RAISE_HAND = "stage_raise_hand"
-    STAGE_TOPIC = "stage_topic"
-    GUILD_APPLICATION_PREMIUM_SUBSCRIPTION = "guild_application_premium_subscription"
-    GUILD_INCIDENT_ALERT_MODE_ENABLED = "guild_incident_alert_mode_enabled"
-    GUILD_INCIDENT_ALERT_MODE_DISABLED = "guild_incident_alert_mode_disabled"
-    GUILD_INCIDENT_REPORT_RAID = "guild_incident_report_raid"
-    GUILD_INCIDENT_REPORT_FALSE_ALARM = "guild_incident_report_false_alarm"
-    PURCHASE_NOTIFICATION = "purchase_notification"
-    POLL_RESULT = "poll_result"
-    EMOJI_ADDED = "emoji_added"
+    DEFAULT = strawberry.enum_value("default", description="Normal message")
+    RECIPIENT_ADD = strawberry.enum_value(
+        "recipient_add", description="Someone was added to a thread"
+    )
+    RECIPIENT_REMOVE = strawberry.enum_value(
+        "recipient_remove", description="Someone was removed from or left a thread"
+    )
+    CALL = strawberry.enum_value("call", description="A call was started")
+    CHANNEL_NAME_CHANGE = strawberry.enum_value(
+        "channel_name_change", description="A thread was renamed"
+    )
+    CHANNEL_ICON_CHANGE = strawberry.enum_value(
+        "channel_icon_change", description="A group DM icon was changed"
+    )
+    CHANNEL_PINNED_MESSAGE = strawberry.enum_value(
+        "channel_pinned_message", description="Someone pinned a message"
+    )
+    USER_JOIN = strawberry.enum_value("user_join", description="Welcome message for a new member")
+    GUILD_BOOST = strawberry.enum_value("guild_boost", description="Someone boosted the server")
+    GUILD_BOOST_TIER_1 = strawberry.enum_value(
+        "guild_boost_tier_1", description="A boost brought the server to level 1"
+    )
+    GUILD_BOOST_TIER_2 = strawberry.enum_value(
+        "guild_boost_tier_2", description="A boost brought the server to level 2"
+    )
+    GUILD_BOOST_TIER_3 = strawberry.enum_value(
+        "guild_boost_tier_3", description="A boost brought the server to level 3"
+    )
+    CHANNEL_FOLLOW_ADD = strawberry.enum_value(
+        "channel_follow_add", description="An announcement channel was followed into this channel"
+    )
+    GUILD_STREAM = strawberry.enum_value(
+        "guild_stream", description="Someone went live in a voice channel"
+    )
+    GUILD_DISCOVERY_DISQUALIFIED = strawberry.enum_value(
+        "guild_discovery_disqualified", description="The server was removed from Server Discovery"
+    )
+    GUILD_DISCOVERY_REQUALIFIED = strawberry.enum_value(
+        "guild_discovery_requalified", description="The server can be in Server Discovery again"
+    )
+    GUILD_DISCOVERY_GRACE_PERIOD_INITIAL_WARNING = strawberry.enum_value(
+        "guild_discovery_grace_period_initial_warning",
+        description="First warning that the server may be removed from Server Discovery",
+    )
+    GUILD_DISCOVERY_GRACE_PERIOD_FINAL_WARNING = strawberry.enum_value(
+        "guild_discovery_grace_period_final_warning",
+        description="Last warning that the server may be removed from Server Discovery",
+    )
+    THREAD_CREATED = strawberry.enum_value("thread_created", description="Someone started a thread")
+    REPLY = strawberry.enum_value("reply", description="Reply to another message")
+    CHAT_INPUT_COMMAND = strawberry.enum_value(
+        "chat_input_command", description="A bot's answer to a slash command"
+    )
+    THREAD_STARTER_MESSAGE = strawberry.enum_value(
+        "thread_starter_message",
+        description="First message of a thread, showing the message it was started from",
+    )
+    GUILD_INVITE_REMINDER = strawberry.enum_value(
+        "guild_invite_reminder", description="Reminder to invite people to the server"
+    )
+    CONTEXT_MENU_COMMAND = strawberry.enum_value(
+        "context_menu_command", description="A bot's answer to a right-click (context menu) command"
+    )
+    AUTO_MODERATION_ACTION = strawberry.enum_value(
+        "auto_moderation_action", description="AutoMod blocked or flagged a message"
+    )
+    ROLE_SUBSCRIPTION_PURCHASE = strawberry.enum_value(
+        "role_subscription_purchase", description="Someone bought or renewed a role subscription"
+    )
+    INTERACTION_PREMIUM_UPSELL = strawberry.enum_value(
+        "interaction_premium_upsell", description="A bot asked for a premium purchase"
+    )
+    STAGE_START = strawberry.enum_value("stage_start", description="A stage started")
+    STAGE_END = strawberry.enum_value("stage_end", description="A stage ended")
+    STAGE_SPEAKER = strawberry.enum_value(
+        "stage_speaker", description="Someone became a speaker on a stage"
+    )
+    STAGE_RAISE_HAND = strawberry.enum_value(
+        "stage_raise_hand", description="Someone raised their hand on a stage"
+    )
+    STAGE_TOPIC = strawberry.enum_value("stage_topic", description="The topic of a stage changed")
+    GUILD_APPLICATION_PREMIUM_SUBSCRIPTION = strawberry.enum_value(
+        "guild_application_premium_subscription",
+        description="Someone bought a bot's premium subscription for the server",
+    )
+    GUILD_INCIDENT_ALERT_MODE_ENABLED = strawberry.enum_value(
+        "guild_incident_alert_mode_enabled",
+        description="Moderators paused invites or DMs, e.g. because of a raid",
+    )
+    GUILD_INCIDENT_ALERT_MODE_DISABLED = strawberry.enum_value(
+        "guild_incident_alert_mode_disabled", description="Moderators resumed invites or DMs"
+    )
+    GUILD_INCIDENT_REPORT_RAID = strawberry.enum_value(
+        "guild_incident_report_raid", description="Someone reported a raid"
+    )
+    GUILD_INCIDENT_REPORT_FALSE_ALARM = strawberry.enum_value(
+        "guild_incident_report_false_alarm",
+        description="A raid report turned out to be a false alarm",
+    )
+    PURCHASE_NOTIFICATION = strawberry.enum_value(
+        "purchase_notification", description="Someone bought something in the server shop"
+    )
+    POLL_RESULT = strawberry.enum_value(
+        "poll_result", description="A poll ended and shows its results"
+    )
+    EMOJI_ADDED = strawberry.enum_value(
+        "emoji_added", description="A new emoji was added to the server"
+    )
 
 
 @strawberry.enum(
@@ -100,11 +168,11 @@ class ActivityTypeEnum(Enum):
 
 @strawberry.enum(name="DiscordStatus", description="Online status of a user.")
 class DiscordStatusEnum(Enum):
-    ONLINE = "online"
-    IDLE = "idle"
+    ONLINE = strawberry.enum_value("online", description="Online")
+    IDLE = strawberry.enum_value("idle", description="Idle (away)")
     DND = strawberry.enum_value("dnd", description="Do not disturb")
     OFFLINE = strawberry.enum_value("offline", description="Offline or invisible")
-    STREAMING = "streaming"
+    STREAMING = strawberry.enum_value("streaming", description="Streaming, e.g. on Twitch")
 
 
 @strawberry.enum(
@@ -126,7 +194,7 @@ class VoiceStateTypeEnum(Enum):
     "A new entry starts whenever their username, display name or global name changes."
 ))
 class UserNameHistoryType:
-    id: int
+    id: int = strawberry.field(description="Internal ID of this entry.")
     user_id: str = strawberry.field(description="Discord user ID.")
     username: str = strawberry.field(description="Unique Discord username (the @ handle).")
     display_name: Optional[str] = strawberry.field(description="Name shown on this server.")
@@ -159,13 +227,15 @@ class MessageActivityType:
     message_id: str = strawberry.field(description="Discord message ID.")
     user_id: str = strawberry.field(description="Discord user ID of the author.")
     channel_id: str = strawberry.field(description="Discord channel ID.")
-    message_type: MessageTypeEnum
+    message_type: MessageTypeEnum = strawberry.field(
+        description="Normal message, reply or a kind of system message."
+    )
     has_attachments: bool = strawberry.field(description="Whether files or images were attached.")
     has_embeds: bool = strawberry.field(description="Whether it had embeds, e.g. link previews.")
     character_count: Optional[int] = strawberry.field(
         description="Length of the text in characters."
     )
-    sent_at: datetime
+    sent_at: datetime = strawberry.field(description="When the message was sent.")
 
     @strawberry.field(description="Channel name. null if the bot never saw the channel.")
     def channel_name(self, info: strawberry.Info[GraphQLContext, None]) -> Optional[str]:
@@ -191,10 +261,10 @@ class MessageActivityType:
     description="A period during a voice session in which the user was e.g. muted or streaming.",
 )
 class VoiceStateLogType:
-    id: int
+    id: int = strawberry.field(description="Internal ID of this entry.")
     session_id: int = strawberry.field(description="ID of the voice session this belongs to.")
-    state_type: VoiceStateTypeEnum
-    started_at: datetime
+    state_type: VoiceStateTypeEnum = strawberry.field(description="Which state, e.g. SELF_MUTE.")
+    started_at: datetime = strawberry.field(description="When the state started.")
     ended_at: Optional[datetime] = strawberry.field(
         description="null while the state is still active."
     )
@@ -225,10 +295,10 @@ class VoiceStateLogType:
     description="One visit to a voice channel, from joining to leaving.",
 )
 class VoiceSessionType:
-    id: int
+    id: int = strawberry.field(description="Internal ID of this visit.")
     user_id: str = strawberry.field(description="Discord user ID.")
     channel_id: str = strawberry.field(description="Discord ID of the voice channel.")
-    joined_at: datetime
+    joined_at: datetime = strawberry.field(description="When the user joined the channel.")
     left_at: Optional[datetime] = strawberry.field(
         description="null while the user is still in the channel."
     )
@@ -280,13 +350,13 @@ class VoiceSessionType:
     description="One activity of a user, e.g. a game session or Spotify listening.",
 )
 class ActivityLogType:
-    id: int
+    id: int = strawberry.field(description="Internal ID of this entry.")
     user_id: str = strawberry.field(description="Discord user ID.")
-    activity_type: ActivityTypeEnum
+    activity_type: ActivityTypeEnum = strawberry.field(description="Playing, listening etc.")
     activity_name: str = strawberry.field(
         description='Name of the game, app etc., e.g. "Minecraft".'
     )
-    started_at: datetime
+    started_at: datetime = strawberry.field(description="When the activity started.")
     ended_at: Optional[datetime] = strawberry.field(description="null while still going on.")
 
     @strawberry.field(
@@ -320,9 +390,9 @@ class ActivityLogType:
     description="A period in which a user had one online status.",
 )
 class PresenceStatusLogType:
-    id: int
+    id: int = strawberry.field(description="Internal ID of this entry.")
     user_id: str = strawberry.field(description="Discord user ID.")
-    status_type: DiscordStatusEnum
+    status_type: DiscordStatusEnum = strawberry.field(description="Online, idle etc.")
     set_at: datetime = strawberry.field(description="When the user got this status.")
     changed_at: Optional[datetime] = strawberry.field(
         description="When the status changed again. null for the current status."
@@ -358,13 +428,13 @@ class PresenceStatusLogType:
     description="A custom status a user set (the text and emoji shown under their name).",
 )
 class CustomStatusType:
-    id: int
+    id: int = strawberry.field(description="Internal ID of this entry.")
     user_id: str = strawberry.field(description="Discord user ID.")
-    status_text: Optional[str]
+    status_text: Optional[str] = strawberry.field(description="The text. null if there is none.")
     emoji: Optional[str] = strawberry.field(
-        description="Unicode emoji, or the name of a custom emoji."
+        description="Unicode emoji, or the name of a custom emoji. null if there is none."
     )
-    set_at: datetime
+    set_at: datetime = strawberry.field(description="When the user set this status.")
 
     @strawberry.field(description="Whether the status has an emoji.")
     def has_emoji(self) -> bool:
@@ -389,8 +459,10 @@ class CustomStatusType:
 @strawberry.type(name="UserStats", description="Summary of one user's activity.")
 class UserStatsType:
     user_id: str = strawberry.field(description="Discord user ID.")
-    total_messages: int
-    total_voice_time_minutes: int = strawberry.field(description="Total time in voice channels.")
+    total_messages: int = strawberry.field(description="Number of messages sent.")
+    total_voice_time_minutes: int = strawberry.field(
+        description="Total time in voice channels. Only finished visits count."
+    )
     total_activities: int = strawberry.field(description="Number of activities started.")
     most_active_hour: Optional[int] = strawberry.field(
         description="Hour of the day (0-23, UTC) in which the user sends the most messages."
@@ -412,7 +484,9 @@ class UserStatsType:
     description="An activity a user has done, added up over all times.",
 )
 class UniqueActivityType:
-    activity_name: str
+    activity_name: str = strawberry.field(
+        description='Name of the game, app etc., e.g. "Minecraft".'
+    )
     total_hours: float = strawberry.field(
         description="Total hours. Activities still going on count as 0."
     )
@@ -747,7 +821,9 @@ class UserType:
 @strawberry.type(name="Channel", description="A Discord channel or thread.")
 class ChannelType:
     channel_id: str = strawberry.field(description="Discord channel ID.")
-    name: str
+    name: str = strawberry.field(
+        description="Current channel name, or the last known one if deleted."
+    )
     channel_type: str = strawberry.field(
         description="Discord channel type, e.g. text, voice, stage_voice, category, public_thread."
     )
@@ -774,10 +850,10 @@ class ChannelType:
 @strawberry.type(name="ChannelStats", description="Message statistics of one text channel.")
 class ChannelStatsType:
     channel_id: str = strawberry.field(description="Discord channel ID.")
-    total_messages: int
+    total_messages: int = strawberry.field(description="Number of messages sent in it.")
     unique_users: int = strawberry.field(description="Number of different users who wrote in it.")
     most_active_user_id: Optional[str] = strawberry.field(
-        description="ID of the user who wrote the most."
+        description="ID of the user who wrote the most. Not affected by the userId filter."
     )
 
     @strawberry.field(description="Channel name. null if the bot never saw the channel.")
@@ -790,9 +866,9 @@ class ServerStatsType:
     total_users: int = strawberry.field(
         description="Number of users who joined in the selected period."
     )
-    total_messages: int
+    total_messages: int = strawberry.field(description="Number of messages sent.")
     total_voice_time_hours: float = strawberry.field(
-        description="Hours spent in voice, all users added up."
+        description="Hours spent in voice, all users added up. Only finished visits count."
     )
     total_activities: int = strawberry.field(description="Number of activities started.")
     most_active_channel_id: Optional[str] = strawberry.field(
@@ -811,9 +887,14 @@ class ServerStatsType:
 
 @strawberry.type(name="DailyStats", description="Activity on one day.")
 class DailyStatsType:
-    date: str = strawberry.field(description='The day, e.g. "2026-01-31".')
-    message_count: int
-    voice_hours: float = strawberry.field(description="Hours spent in voice, all users added up.")
+    date: str = strawberry.field(description='The day (UTC), e.g. "2026-01-31".')
+    message_count: int = strawberry.field(description="Number of messages sent.")
+    voice_hours: float = strawberry.field(
+        description=(
+            "Hours spent in voice, all users added up. "
+            "Only finished visits count, by the day they started."
+        )
+    )
     activity_count: int = strawberry.field(description="Number of activities started.")
     active_users: int = strawberry.field(
         description="Number of users who sent at least one message."
@@ -826,7 +907,7 @@ class DailyStatsType:
 )
 class HourlyDistributionType:
     hour: int = strawberry.field(description="Hour of the day, 0-23 (UTC).")
-    count: int
+    count: int = strawberry.field(description="Number of messages sent in this hour.")
 
 
 @strawberry.type(
@@ -834,8 +915,8 @@ class HourlyDistributionType:
     description="A ranked channel or activity. See the query for what name and count mean.",
 )
 class TopItemType:
-    name: str
-    count: int
+    name: str = strawberry.field(description="Channel or activity name.")
+    count: int = strawberry.field(description="Number of channel visits or activity starts.")
     hours: float = strawberry.field(default=0.0, description="Total hours.")
 
 
@@ -846,9 +927,11 @@ class TopItemType:
 class TopUserType:
     user_id: str = strawberry.field(description="Discord user ID.")
     name: str = strawberry.field(description="Current display name.")
-    message_count: int
-    voice_hours: float
-    score: float = strawberry.field(default=0.0, description="voice minutes + messages")
+    message_count: int = strawberry.field(description="Number of messages sent.")
+    voice_hours: float = strawberry.field(
+        description="Hours spent in voice. Only finished visits count."
+    )
+    score: float = strawberry.field(default=0.0, description="Voice minutes + messages.")
 
 
 @strawberry.type(
@@ -856,10 +939,10 @@ class TopUserType:
     description="A user and how long they spent in one voice state.",
 )
 class TopVoiceStateUserType:
-    state_type: VoiceStateTypeEnum
+    state_type: VoiceStateTypeEnum = strawberry.field(description="Which state, e.g. SELF_MUTE.")
     user_id: str = strawberry.field(description="Discord user ID.")
     name: str = strawberry.field(description="Current display name.")
-    hours: float
+    hours: float = strawberry.field(description="Hours spent in this state.")
 
 
 @strawberry.type(
@@ -867,10 +950,10 @@ class TopVoiceStateUserType:
     description="Two users and how long they were in the same voice channel at the same time.",
 )
 class VoiceConnectionType:
-    user1_id: str
-    user1_name: str
-    user2_id: str
-    user2_name: str
+    user1_id: str = strawberry.field(description="Discord user ID of the first user.")
+    user1_name: str = strawberry.field(description="Current display name of the first user.")
+    user2_id: str = strawberry.field(description="Discord user ID of the second user.")
+    user2_name: str = strawberry.field(description="Current display name of the second user.")
     shared_hours: float = strawberry.field(description="Hours both were in the same channel.")
     session_count: int = strawberry.field(
         description="Number of times they were in a channel together."
