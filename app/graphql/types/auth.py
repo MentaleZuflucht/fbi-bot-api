@@ -15,13 +15,16 @@ from app.graphql.permissions import IsAdmin
 from app.auth.models import ApiKey, ApiUsage
 
 
-@strawberry.enum(description="What an API key may do.")
+@strawberry.enum(name="ApiKeyRole", description="What an API key may do.")
 class UserRoleType(Enum):
     ADMIN = strawberry.enum_value("admin", description="Query data and manage API keys")
     READ = strawberry.enum_value("read", description="Query data")
 
 
-@strawberry.type(description="An API key. The full key is never shown again after creating it.")
+@strawberry.type(
+    name="ApiKey",
+    description="An API key. The full key is never shown again after creating it.",
+)
 class ApiKeyType:
     id: int
     name: str = strawberry.field(description="Who the key is for.")
@@ -75,14 +78,14 @@ class ApiKeyType:
         )
 
 
-@strawberry.type(description="Request statistics of one API key.")
+@strawberry.type(name="ApiKeyUsageStats", description="Request statistics of one API key.")
 class ApiKeyUsageStatsType:
     total_requests: int
     error_count: int = strawberry.field(description="Requests that returned errors.")
     success_rate: float = strawberry.field(description="Percentage of successful requests, 0-100.")
 
 
-@strawberry.type(description=(
+@strawberry.type(name="ApiUsage", description=(
     "One logged API request. Only requests made with an API key are logged, "
     "not the website's."
 ))
@@ -111,7 +114,7 @@ class ApiUsageType:
         )
 
 
-@strawberry.type(description="Overview of API keys and requests.")
+@strawberry.type(name="AuthStats", description="Overview of API keys and requests.")
 class AuthStatsType:
     total_api_keys: int
     admin_keys: int

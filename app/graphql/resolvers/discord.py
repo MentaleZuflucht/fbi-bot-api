@@ -944,6 +944,7 @@ class Query:
             "newest members first. Like users(search: ...), but sorted by first seen."
         ),
         permission_classes=[IsAuthenticated],
+        deprecation_reason="Use users(search: ...) instead.",
     )
     def search_users(
         self,

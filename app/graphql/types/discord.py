@@ -38,7 +38,7 @@ def parse_date_filter(
 
 
 # Enums
-@strawberry.enum(description=(
+@strawberry.enum(name="MessageType", description=(
     "Discord message type. DEFAULT is a normal message and REPLY a reply, "
     "most others are system messages."
 ))
@@ -82,7 +82,10 @@ class MessageTypeEnum(Enum):
     POLL_RESULT = "poll_result"
 
 
-@strawberry.enum(description="What kind of activity a user is doing, as shown in Discord.")
+@strawberry.enum(
+    name="ActivityType",
+    description="What kind of activity a user is doing, as shown in Discord.",
+)
 class ActivityTypeEnum(Enum):
     COMPETING = strawberry.enum_value("competing", description="Competing in something")
     CUSTOM = strawberry.enum_value("custom", description="Custom status")
@@ -92,7 +95,7 @@ class ActivityTypeEnum(Enum):
     WATCHING = strawberry.enum_value("watching", description="Watching something")
 
 
-@strawberry.enum(description="Online status of a user.")
+@strawberry.enum(name="DiscordStatus", description="Online status of a user.")
 class DiscordStatusEnum(Enum):
     ONLINE = "online"
     IDLE = "idle"
@@ -101,7 +104,10 @@ class DiscordStatusEnum(Enum):
     STREAMING = "streaming"
 
 
-@strawberry.enum(description="Voice channel state, like being muted or streaming.")
+@strawberry.enum(
+    name="VoiceStateType",
+    description="Voice channel state, like being muted or streaming.",
+)
 class VoiceStateTypeEnum(Enum):
     DEAF = strawberry.enum_value("deaf", description="Deafened by a moderator")
     MUTE = strawberry.enum_value("mute", description="Muted by a moderator")
@@ -112,7 +118,7 @@ class VoiceStateTypeEnum(Enum):
 
 
 # Core Types
-@strawberry.type(description=(
+@strawberry.type(name="UserName", description=(
     "One name a user had for some time. "
     "A new entry starts whenever their username, display name or global name changes."
 ))
@@ -145,7 +151,7 @@ class UserNameHistoryType:
         )
 
 
-@strawberry.type(description="A sent message. The content itself is never stored.")
+@strawberry.type(name="Message", description="A sent message. The content itself is never stored.")
 class MessageActivityType:
     message_id: str = strawberry.field(description="Discord message ID.")
     user_id: str = strawberry.field(description="Discord user ID of the author.")
@@ -174,7 +180,8 @@ class MessageActivityType:
 
 
 @strawberry.type(
-    description="A period during a voice session in which the user was e.g. muted or streaming."
+    name="VoiceStateLog",
+    description="A period during a voice session in which the user was e.g. muted or streaming.",
 )
 class VoiceStateLogType:
     id: int
@@ -206,7 +213,10 @@ class VoiceStateLogType:
         )
 
 
-@strawberry.type(description="One visit to a voice channel, from joining to leaving.")
+@strawberry.type(
+    name="VoiceSession",
+    description="One visit to a voice channel, from joining to leaving.",
+)
 class VoiceSessionType:
     id: int
     user_id: str = strawberry.field(description="Discord user ID.")
@@ -254,7 +264,10 @@ class VoiceSessionType:
         )
 
 
-@strawberry.type(description="One activity of a user, e.g. a game session or Spotify listening.")
+@strawberry.type(
+    name="Activity",
+    description="One activity of a user, e.g. a game session or Spotify listening.",
+)
 class ActivityLogType:
     id: int
     user_id: str = strawberry.field(description="Discord user ID.")
@@ -291,7 +304,10 @@ class ActivityLogType:
         )
 
 
-@strawberry.type(description="A period in which a user had one online status.")
+@strawberry.type(
+    name="PresenceStatus",
+    description="A period in which a user had one online status.",
+)
 class PresenceStatusLogType:
     id: int
     user_id: str = strawberry.field(description="Discord user ID.")
@@ -327,7 +343,8 @@ class PresenceStatusLogType:
 
 
 @strawberry.type(
-    description="A custom status a user set (the text and emoji shown under their name)."
+    name="CustomStatus",
+    description="A custom status a user set (the text and emoji shown under their name).",
 )
 class CustomStatusType:
     id: int
@@ -358,7 +375,7 @@ class CustomStatusType:
         )
 
 
-@strawberry.type(description="Summary of one user's activity.")
+@strawberry.type(name="UserStats", description="Summary of one user's activity.")
 class UserStatsType:
     user_id: str = strawberry.field(description="Discord user ID.")
     total_messages: int
@@ -375,7 +392,10 @@ class UserStatsType:
     )
 
 
-@strawberry.type(description="An activity a user has done, added up over all times.")
+@strawberry.type(
+    name="UniqueActivity",
+    description="An activity a user has done, added up over all times.",
+)
 class UniqueActivityType:
     activity_name: str
     total_hours: float = strawberry.field(
@@ -384,7 +404,7 @@ class UniqueActivityType:
     count: int = strawberry.field(description="How often the user started it.")
 
 
-@strawberry.type(description="A Discord user the bot has seen on the server.")
+@strawberry.type(name="User", description="A Discord user the bot has seen on the server.")
 class UserType:
     user_id: str = strawberry.field(description="Discord user ID.")
     first_seen: datetime = strawberry.field(description="When the user joined the server.")
@@ -710,7 +730,7 @@ class UserType:
 
 
 # Statistics Types
-@strawberry.type(description="Message statistics of one text channel.")
+@strawberry.type(name="ChannelStats", description="Message statistics of one text channel.")
 class ChannelStatsType:
     channel_id: str = strawberry.field(description="Discord channel ID.")
     total_messages: int
@@ -720,7 +740,7 @@ class ChannelStatsType:
     )
 
 
-@strawberry.type(description="Totals for the whole server.")
+@strawberry.type(name="ServerStats", description="Totals for the whole server.")
 class ServerStatsType:
     total_users: int = strawberry.field(
         description="Number of users who joined in the selected period."
@@ -738,7 +758,7 @@ class ServerStatsType:
     )
 
 
-@strawberry.type(description="Activity on one day.")
+@strawberry.type(name="DailyStats", description="Activity on one day.")
 class DailyStatsType:
     date: str = strawberry.field(description='The day, e.g. "2026-01-31".')
     message_count: int
@@ -749,14 +769,18 @@ class DailyStatsType:
     )
 
 
-@strawberry.type(description="Number of messages sent in one hour of the day.")
+@strawberry.type(
+    name="HourlyDistribution",
+    description="Number of messages sent in one hour of the day.",
+)
 class HourlyDistributionType:
     hour: int = strawberry.field(description="Hour of the day, 0-23 (UTC).")
     count: int
 
 
 @strawberry.type(
-    description="A ranked channel or activity. See the query for what name and count mean."
+    name="TopItem",
+    description="A ranked channel or activity. See the query for what name and count mean.",
 )
 class TopItemType:
     name: str
@@ -764,7 +788,10 @@ class TopItemType:
     hours: float = strawberry.field(default=0.0, description="Total hours.")
 
 
-@strawberry.type(description="A ranked user. See topUsers for how the score is calculated.")
+@strawberry.type(
+    name="TopUser",
+    description="A ranked user. See topUsers for how the score is calculated.",
+)
 class TopUserType:
     user_id: str = strawberry.field(description="Discord user ID.")
     name: str = strawberry.field(description="Current display name.")
@@ -773,7 +800,10 @@ class TopUserType:
     score: float = strawberry.field(default=0.0, description="voice minutes + messages")
 
 
-@strawberry.type(description="A user and how long they spent in one voice state.")
+@strawberry.type(
+    name="TopVoiceStateUser",
+    description="A user and how long they spent in one voice state.",
+)
 class TopVoiceStateUserType:
     state_type: VoiceStateTypeEnum
     user_id: str = strawberry.field(description="Discord user ID.")
@@ -782,7 +812,8 @@ class TopVoiceStateUserType:
 
 
 @strawberry.type(
-    description="Two users and how long they were in the same voice channel at the same time."
+    name="VoiceConnection",
+    description="Two users and how long they were in the same voice channel at the same time.",
 )
 class VoiceConnectionType:
     user1_id: str
