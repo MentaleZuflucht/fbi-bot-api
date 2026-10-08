@@ -1,21 +1,24 @@
+# Exact versions, so a new release can't change a build unnoticed.
+# To update: bump a version, rebuild and test.
+
 # FastAPI
-fastapi>=0.135.2
-uvicorn>=0.42.0
+fastapi==0.143.0
+uvicorn==0.54.0
 
 # Database
-SQLModel>=0.0.37
-SQLAlchemy>=2.0.48
-psycopg[binary]>=3.3.6
+SQLModel==0.0.48
+SQLAlchemy==2.1.4
+psycopg[binary]==3.3.6
 
 # GraphQL
-strawberry-graphql[fastapi]>=0.312.0
+strawberry-graphql[fastapi]==0.332.0
 
 # Authentication & Security
-PyJWT>=2.12.1
+PyJWT==2.15.1
 
 # Environment Variables
-python-dotenv>=1.2.2
-pydantic-settings>=2.13.1
+python-dotenv==1.2.4
+pydantic-settings==2.15.0
 
 # Logging
-PyYAML>=6.0.3
+PyYAML==6.0.3
