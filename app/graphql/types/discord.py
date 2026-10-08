@@ -5,12 +5,13 @@ These types expose the Discord database models for querying user activity,
 messages, voice sessions, and other Discord-related data.
 """
 
-from typing import Optional, List, Tuple
+from typing import Annotated, Optional, List, Tuple
 from datetime import datetime, timedelta
 from enum import Enum
 import strawberry
 from sqlmodel import select, func, and_
 from sqlalchemy import case
+from app.graphql.arguments import Limit, ChannelId, Days, StartDate, EndDate
 from app.graphql.context import GraphQLContext
 from app.discord.models import (
     User, MessageActivity, VoiceSession, VoiceStateLog,
@@ -37,9 +38,11 @@ def parse_date_filter(
 
 
 # Enums
-@strawberry.enum
+@strawberry.enum(description=(
+    "Discord message type. DEFAULT is a normal message and REPLY a reply, "
+    "most others are system messages."
+))
 class MessageTypeEnum(Enum):
-    """GraphQL enum for Discord message types."""
     DEFAULT = "default"
     RECIPIENT_ADD = "recipient_add"
     RECIPIENT_REMOVE = "recipient_remove"
@@ -79,49 +82,54 @@ class MessageTypeEnum(Enum):
     POLL_RESULT = "poll_result"
 
 
-@strawberry.enum
+@strawberry.enum(description="What kind of activity a user is doing, as shown in Discord.")
 class ActivityTypeEnum(Enum):
-    """GraphQL enum for Discord activity types."""
-    COMPETING = "competing"
-    CUSTOM = "custom"
-    LISTENING = "listening"
-    PLAYING = "playing"
-    STREAMING = "streaming"
-    WATCHING = "watching"
+    COMPETING = strawberry.enum_value("competing", description="Competing in something")
+    CUSTOM = strawberry.enum_value("custom", description="Custom status")
+    LISTENING = strawberry.enum_value("listening", description="Listening, e.g. to Spotify")
+    PLAYING = strawberry.enum_value("playing", description="Playing a game")
+    STREAMING = strawberry.enum_value("streaming", description="Streaming, e.g. on Twitch")
+    WATCHING = strawberry.enum_value("watching", description="Watching something")
 
 
-@strawberry.enum
+@strawberry.enum(description="Online status of a user.")
 class DiscordStatusEnum(Enum):
-    """GraphQL enum for Discord status types."""
     ONLINE = "online"
     IDLE = "idle"
-    DND = "dnd"
-    OFFLINE = "offline"
+    DND = strawberry.enum_value("dnd", description="Do not disturb")
+    OFFLINE = strawberry.enum_value("offline", description="Offline or invisible")
     STREAMING = "streaming"
 
 
-@strawberry.enum
+@strawberry.enum(description="Voice channel state, like being muted or streaming.")
 class VoiceStateTypeEnum(Enum):
-    """GraphQL enum for voice state types."""
-    DEAF = "deaf"
-    MUTE = "mute"
-    SELF_DEAF = "self_deaf"
-    SELF_MUTE = "self_mute"
-    SELF_STREAM = "self_stream"
-    SELF_VIDEO = "self_video"
+    DEAF = strawberry.enum_value("deaf", description="Deafened by a moderator")
+    MUTE = strawberry.enum_value("mute", description="Muted by a moderator")
+    SELF_DEAF = strawberry.enum_value("self_deaf", description="Deafened themselves")
+    SELF_MUTE = strawberry.enum_value("self_mute", description="Muted themselves")
+    SELF_STREAM = strawberry.enum_value("self_stream", description="Sharing their screen (Go Live)")
+    SELF_VIDEO = strawberry.enum_value("self_video", description="Camera on")
 
 
 # Core Types
-@strawberry.type
+@strawberry.type(description=(
+    "One name a user had for some time. "
+    "A new entry starts whenever their username, display name or global name changes."
+))
 class UserNameHistoryType:
-    """GraphQL type for user name history."""
     id: int
-    user_id: str
-    username: str
-    display_name: Optional[str]
-    global_name: Optional[str]
-    effective_from: datetime
-    effective_until: Optional[datetime]
+    user_id: str = strawberry.field(description="Discord user ID.")
+    username: str = strawberry.field(description="Unique Discord username (the @ handle).")
+    display_name: Optional[str] = strawberry.field(description="Name shown on this server.")
+    global_name: Optional[str] = strawberry.field(
+        description="Display name set on the Discord account."
+    )
+    effective_from: datetime = strawberry.field(
+        description="When the user started using this name."
+    )
+    effective_until: Optional[datetime] = strawberry.field(
+        description="When the name changed again. null means it is the current name."
+    )
 
     @classmethod
     def from_model(cls, name_history: UserNameHistory) -> "UserNameHistoryType":
@@ -137,16 +145,17 @@ class UserNameHistoryType:
         )
 
 
-@strawberry.type
+@strawberry.type(description="A sent message. The content itself is never stored.")
 class MessageActivityType:
-    """GraphQL type for message activity."""
-    message_id: str
-    user_id: str
-    channel_id: str
+    message_id: str = strawberry.field(description="Discord message ID.")
+    user_id: str = strawberry.field(description="Discord user ID of the author.")
+    channel_id: str = strawberry.field(description="Discord channel ID.")
     message_type: MessageTypeEnum
-    has_attachments: bool
-    has_embeds: bool
-    character_count: Optional[int]
+    has_attachments: bool = strawberry.field(description="Whether files or images were attached.")
+    has_embeds: bool = strawberry.field(description="Whether it had embeds, e.g. link previews.")
+    character_count: Optional[int] = strawberry.field(
+        description="Length of the text in characters."
+    )
     sent_at: datetime
 
     @classmethod
@@ -164,18 +173,22 @@ class MessageActivityType:
         )
 
 
-@strawberry.type
+@strawberry.type(
+    description="A period during a voice session in which the user was e.g. muted or streaming."
+)
 class VoiceStateLogType:
-    """GraphQL type for voice state logs."""
     id: int
-    session_id: int
+    session_id: int = strawberry.field(description="ID of the voice session this belongs to.")
     state_type: VoiceStateTypeEnum
     started_at: datetime
-    ended_at: Optional[datetime]
+    ended_at: Optional[datetime] = strawberry.field(
+        description="null while the state is still active."
+    )
 
-    @strawberry.field
+    @strawberry.field(
+        description="How long the state lasted, in whole minutes. null while still active."
+    )
     def duration_minutes(self) -> Optional[int]:
-        """Calculate duration in minutes if state has ended."""
         if self.started_at and self.ended_at:
             duration = self.ended_at - self.started_at
             return max(0, int(duration.total_seconds() / 60))
@@ -193,34 +206,34 @@ class VoiceStateLogType:
         )
 
 
-@strawberry.type
+@strawberry.type(description="One visit to a voice channel, from joining to leaving.")
 class VoiceSessionType:
-    """GraphQL type for voice sessions."""
     id: int
-    user_id: str
-    channel_id: str
+    user_id: str = strawberry.field(description="Discord user ID.")
+    channel_id: str = strawberry.field(description="Discord ID of the voice channel.")
     joined_at: datetime
-    left_at: Optional[datetime]
+    left_at: Optional[datetime] = strawberry.field(
+        description="null while the user is still in the channel."
+    )
 
-    @strawberry.field
+    @strawberry.field(
+        description="How long the visit lasted, in whole minutes. null while still in the channel."
+    )
     def duration_minutes(self) -> Optional[int]:
-        """Calculate session duration in minutes if session has ended."""
         if self.joined_at and self.left_at:
             duration = self.left_at - self.joined_at
             return max(0, int(duration.total_seconds() / 60))
         return None
 
-    @strawberry.field
+    @strawberry.field(description="Whether the user is still in the channel.")
     def is_ongoing(self) -> bool:
-        """Check if the voice session is currently ongoing."""
         return self.left_at is None
 
-    @strawberry.field
+    @strawberry.field(description="Muting, streaming etc. during this visit, in order.")
     def voice_states(
         self,
         info: strawberry.Info[GraphQLContext, None]
     ) -> List[VoiceStateLogType]:
-        """Get voice states for this session."""
         if not info.context.is_authenticated:
             raise Exception("Authentication required")
 
@@ -244,27 +257,28 @@ class VoiceSessionType:
         )
 
 
-@strawberry.type
+@strawberry.type(description="One activity of a user, e.g. a game session or Spotify listening.")
 class ActivityLogType:
-    """GraphQL type for activity logs."""
     id: int
-    user_id: str
+    user_id: str = strawberry.field(description="Discord user ID.")
     activity_type: ActivityTypeEnum
-    activity_name: str
+    activity_name: str = strawberry.field(
+        description='Name of the game, app etc., e.g. "Minecraft".'
+    )
     started_at: datetime
-    ended_at: Optional[datetime]
+    ended_at: Optional[datetime] = strawberry.field(description="null while still going on.")
 
-    @strawberry.field
+    @strawberry.field(
+        description="How long it lasted, in whole minutes. null while still going on."
+    )
     def duration_minutes(self) -> Optional[int]:
-        """Calculate duration in minutes if activity has ended."""
         if self.started_at and self.ended_at:
             duration = self.ended_at - self.started_at
             return max(0, int(duration.total_seconds() / 60))
         return None
 
-    @strawberry.field
+    @strawberry.field(description="Whether the activity is still going on.")
     def is_ongoing(self) -> bool:
-        """Check if the activity is currently ongoing."""
         return self.ended_at is None
 
     @classmethod
@@ -280,26 +294,27 @@ class ActivityLogType:
         )
 
 
-@strawberry.type
+@strawberry.type(description="A period in which a user had one online status.")
 class PresenceStatusLogType:
-    """GraphQL type for presence status logs."""
     id: int
-    user_id: str
+    user_id: str = strawberry.field(description="Discord user ID.")
     status_type: DiscordStatusEnum
-    set_at: datetime
-    changed_at: Optional[datetime]
+    set_at: datetime = strawberry.field(description="When the user got this status.")
+    changed_at: Optional[datetime] = strawberry.field(
+        description="When the status changed again. null for the current status."
+    )
 
-    @strawberry.field
+    @strawberry.field(
+        description="How long the status lasted, in whole minutes. null for the current status."
+    )
     def duration_minutes(self) -> Optional[int]:
-        """Calculate status duration in minutes if status has changed."""
         if self.set_at and self.changed_at:
             duration = self.changed_at - self.set_at
             return max(0, int(duration.total_seconds() / 60))
         return None
 
-    @strawberry.field
+    @strawberry.field(description="Whether this is the user's current status.")
     def is_current(self) -> bool:
-        """Check if this is the current status."""
         return self.changed_at is None
 
     @classmethod
@@ -314,23 +329,24 @@ class PresenceStatusLogType:
         )
 
 
-@strawberry.type
+@strawberry.type(
+    description="A custom status a user set (the text and emoji shown under their name)."
+)
 class CustomStatusType:
-    """GraphQL type for custom statuses."""
     id: int
-    user_id: str
+    user_id: str = strawberry.field(description="Discord user ID.")
     status_text: Optional[str]
-    emoji: Optional[str]
+    emoji: Optional[str] = strawberry.field(
+        description="Unicode emoji, or the name of a custom emoji."
+    )
     set_at: datetime
 
-    @strawberry.field
+    @strawberry.field(description="Whether the status has an emoji.")
     def has_emoji(self) -> bool:
-        """Check if the custom status has an emoji."""
         return self.emoji is not None and len(self.emoji.strip()) > 0
 
-    @strawberry.field
+    @strawberry.field(description="Whether the status has text.")
     def has_text(self) -> bool:
-        """Check if the custom status has text."""
         return self.status_text is not None and len(self.status_text.strip()) > 0
 
     @classmethod
@@ -345,38 +361,42 @@ class CustomStatusType:
         )
 
 
-@strawberry.type
+@strawberry.type(description="Summary of one user's activity.")
 class UserStatsType:
-    """GraphQL type for user statistics."""
-    user_id: str
+    user_id: str = strawberry.field(description="Discord user ID.")
     total_messages: int
-    total_voice_time_minutes: int
-    total_activities: int
-    most_active_hour: Optional[int]
-    favorite_activity: Optional[str]
-    most_used_channel: Optional[str]
+    total_voice_time_minutes: int = strawberry.field(description="Total time in voice channels.")
+    total_activities: int = strawberry.field(description="Number of activities started.")
+    most_active_hour: Optional[int] = strawberry.field(
+        description="Hour of the day (0-23, UTC) in which the user sends the most messages."
+    )
+    favorite_activity: Optional[str] = strawberry.field(
+        description="Activity the user started most often."
+    )
+    most_used_channel: Optional[str] = strawberry.field(
+        description="ID of the channel the user sends the most messages in."
+    )
 
 
-@strawberry.type
+@strawberry.type(description="An activity a user has done, added up over all times.")
 class UniqueActivityType:
-    """Aggregated unique activity for a user."""
     activity_name: str
-    total_hours: float
-    count: int
+    total_hours: float = strawberry.field(
+        description="Total hours. Activities still going on count as 0."
+    )
+    count: int = strawberry.field(description="How often the user started it.")
 
 
-@strawberry.type
+@strawberry.type(description="A Discord user the bot has seen on the server.")
 class UserType:
-    """GraphQL type for Discord users."""
-    user_id: str
-    first_seen: datetime
+    user_id: str = strawberry.field(description="Discord user ID.")
+    first_seen: datetime = strawberry.field(description="When the user joined the server.")
 
-    @strawberry.field
+    @strawberry.field(description="The user's current names.")
     def current_name(
         self,
         info: strawberry.Info[GraphQLContext, None]
     ) -> Optional[UserNameHistoryType]:
-        """Get the current name information for this user."""
         if not info.context.is_authenticated:
             raise Exception("Authentication required")
 
@@ -388,13 +408,12 @@ class UserType:
 
         return UserNameHistoryType.from_model(current_name) if current_name else None
 
-    @strawberry.field
+    @strawberry.field(description="All names the user had, newest first.")
     def name_history(
         self,
         info: strawberry.Info[GraphQLContext, None],
-        limit: int = 10
+        limit: Limit = 10
     ) -> List[UserNameHistoryType]:
-        """Get name history for this user."""
         if not info.context.is_authenticated:
             raise Exception("Authentication required")
 
@@ -407,23 +426,22 @@ class UserType:
 
         return [UserNameHistoryType.from_model(name) for name in names]
 
-    @strawberry.field
+    @strawberry.field(description="The user's messages, newest first.")
     def messages(
         self,
         info: strawberry.Info[GraphQLContext, None],
-        limit: int = 50,
-        channel_id: Optional[int] = None,
-        days: Optional[int] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        limit: Limit = 50,
+        channel_id: ChannelId = None,
+        days: Days = None,
+        start_date: StartDate = None,
+        end_date: EndDate = None,
     ) -> List[MessageActivityType]:
-        """Get messages for this user."""
         if not info.context.is_authenticated:
             raise Exception("Authentication required")
 
         query = select(MessageActivity).where(MessageActivity.user_id == self.user_id)
         if channel_id:
-            query = query.where(MessageActivity.channel_id == channel_id)
+            query = query.where(MessageActivity.channel_id == int(channel_id))
 
         start, end = parse_date_filter(days, start_date, end_date)
         if start:
@@ -437,16 +455,15 @@ class UserType:
 
         return [MessageActivityType.from_model(msg) for msg in messages]
 
-    @strawberry.field
+    @strawberry.field(description="Number of messages the user sent.")
     def message_count(
         self,
         info: strawberry.Info[GraphQLContext, None],
-        days: Optional[int] = None,
-        channel_id: Optional[int] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        days: Days = None,
+        channel_id: ChannelId = None,
+        start_date: StartDate = None,
+        end_date: EndDate = None,
     ) -> int:
-        """Get total message count for this user."""
         if not info.context.is_authenticated:
             raise Exception("Authentication required")
 
@@ -454,7 +471,7 @@ class UserType:
             MessageActivity.user_id == self.user_id
         )
         if channel_id:
-            query = query.where(MessageActivity.channel_id == channel_id)
+            query = query.where(MessageActivity.channel_id == int(channel_id))
 
         start, end = parse_date_filter(days, start_date, end_date)
         if start:
@@ -465,16 +482,15 @@ class UserType:
         count = info.context.discord_db.exec(query).first()
         return count or 0
 
-    @strawberry.field
+    @strawberry.field(description="The user's voice channel visits, newest first.")
     def voice_sessions(
         self,
         info: strawberry.Info[GraphQLContext, None],
-        limit: int = 50,
-        days: Optional[int] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        limit: Limit = 50,
+        days: Days = None,
+        start_date: StartDate = None,
+        end_date: EndDate = None,
     ) -> List[VoiceSessionType]:
-        """Get voice sessions for this user."""
         if not info.context.is_authenticated:
             raise Exception("Authentication required")
 
@@ -492,17 +508,18 @@ class UserType:
 
         return [VoiceSessionType.from_model(session) for session in sessions]
 
-    @strawberry.field
+    @strawberry.field(description="The user's activities, newest first.")
     def activities(
         self,
         info: strawberry.Info[GraphQLContext, None],
-        limit: int = 50,
-        activity_type: Optional[ActivityTypeEnum] = None,
-        days: Optional[int] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        limit: Limit = 50,
+        activity_type: Annotated[Optional[ActivityTypeEnum], strawberry.argument(
+            description="Only activities of this type."
+        )] = None,
+        days: Days = None,
+        start_date: StartDate = None,
+        end_date: EndDate = None,
     ) -> List[ActivityLogType]:
-        """Get activities for this user."""
         if not info.context.is_authenticated:
             raise Exception("Authentication required")
 
@@ -522,16 +539,15 @@ class UserType:
 
         return [ActivityLogType.from_model(activity) for activity in activities]
 
-    @strawberry.field
+    @strawberry.field(description="The user's online status history, newest first.")
     def presence_status(
         self,
         info: strawberry.Info[GraphQLContext, None],
-        limit: int = 50,
-        days: Optional[int] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        limit: Limit = 50,
+        days: Days = None,
+        start_date: StartDate = None,
+        end_date: EndDate = None,
     ) -> List[PresenceStatusLogType]:
-        """Get presence status history for this user."""
         if not info.context.is_authenticated:
             raise Exception("Authentication required")
 
@@ -549,16 +565,15 @@ class UserType:
 
         return [PresenceStatusLogType.from_model(status) for status in statuses]
 
-    @strawberry.field
+    @strawberry.field(description="The user's custom statuses, newest first.")
     def custom_statuses(
         self,
         info: strawberry.Info[GraphQLContext, None],
-        limit: int = 50,
-        days: Optional[int] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        limit: Limit = 50,
+        days: Days = None,
+        start_date: StartDate = None,
+        end_date: EndDate = None,
     ) -> List[CustomStatusType]:
-        """Get custom statuses for this user."""
         if not info.context.is_authenticated:
             raise Exception("Authentication required")
 
@@ -576,15 +591,16 @@ class UserType:
 
         return [CustomStatusType.from_model(status) for status in statuses]
 
-    @strawberry.field
+    @strawberry.field(
+        description="Every activity the user has done, with total hours, most hours first."
+    )
     def unique_activities(
         self,
         info: strawberry.Info[GraphQLContext, None],
-        days: Optional[int] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        days: Days = None,
+        start_date: StartDate = None,
+        end_date: EndDate = None,
     ) -> List[UniqueActivityType]:
-        """Get every unique activity this user has done, with total hours and count."""
         if not info.context.is_authenticated:
             raise Exception("Authentication required")
 
@@ -622,15 +638,14 @@ class UserType:
             for r in results
         ]
 
-    @strawberry.field
+    @strawberry.field(description="Summary of the user's activity.")
     def stats(
         self,
         info: strawberry.Info[GraphQLContext, None],
-        days: Optional[int] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        days: Days = None,
+        start_date: StartDate = None,
+        end_date: EndDate = None,
     ) -> UserStatsType:
-        """Get comprehensive statistics for this user."""
         if not info.context.is_authenticated:
             raise Exception("Authentication required")
 
@@ -728,76 +743,86 @@ class UserType:
 
 
 # Statistics Types
-@strawberry.type
+@strawberry.type(description="Message statistics of one text channel.")
 class ChannelStatsType:
-    """GraphQL type for channel statistics."""
-    channel_id: str
+    channel_id: str = strawberry.field(description="Discord channel ID.")
     total_messages: int
-    unique_users: int
-    most_active_user_id: Optional[str]
+    unique_users: int = strawberry.field(description="Number of different users who wrote in it.")
+    most_active_user_id: Optional[str] = strawberry.field(
+        description="ID of the user who wrote the most."
+    )
 
 
-@strawberry.type
+@strawberry.type(description="Totals for the whole server.")
 class ServerStatsType:
-    """GraphQL type for server-wide statistics."""
-    total_users: int
+    total_users: int = strawberry.field(
+        description="Number of users who joined in the selected period."
+    )
     total_messages: int
-    total_voice_time_hours: float
-    total_activities: int
-    most_active_channel_id: Optional[str]
-    most_common_activity: Optional[str]
+    total_voice_time_hours: float = strawberry.field(
+        description="Hours spent in voice, all users added up."
+    )
+    total_activities: int = strawberry.field(description="Number of activities started.")
+    most_active_channel_id: Optional[str] = strawberry.field(
+        description="ID of the text channel with the most messages."
+    )
+    most_common_activity: Optional[str] = strawberry.field(
+        description="Activity started most often."
+    )
 
 
-@strawberry.type
+@strawberry.type(description="Activity on one day.")
 class DailyStatsType:
-    """Per-day aggregated counts for charts."""
-    date: str
+    date: str = strawberry.field(description='The day, e.g. "2026-01-31".')
     message_count: int
-    voice_hours: float
-    activity_count: int
-    active_users: int
+    voice_hours: float = strawberry.field(description="Hours spent in voice, all users added up.")
+    activity_count: int = strawberry.field(description="Number of activities started.")
+    active_users: int = strawberry.field(
+        description="Number of users who sent at least one message."
+    )
 
 
-@strawberry.type
+@strawberry.type(description="Number of messages sent in one hour of the day.")
 class HourlyDistributionType:
-    """Message count bucketed by hour-of-day (0-23)."""
-    hour: int
+    hour: int = strawberry.field(description="Hour of the day, 0-23 (UTC).")
     count: int
 
 
-@strawberry.type
+@strawberry.type(
+    description="A ranked channel or activity. See the query for what name and count mean."
+)
 class TopItemType:
-    """Generic ranked item (channel, activity, …) with count and hours."""
     name: str
     count: int
-    hours: float = 0.0
+    hours: float = strawberry.field(default=0.0, description="Total hours.")
 
 
-@strawberry.type
+@strawberry.type(description="A ranked user. See topUsers for how the score is calculated.")
 class TopUserType:
-    """Ranked user with composite voice-weighted score."""
-    user_id: str
-    name: str
+    user_id: str = strawberry.field(description="Discord user ID.")
+    name: str = strawberry.field(description="Current display name.")
     message_count: int
     voice_hours: float
-    score: float = 0.0
+    score: float = strawberry.field(default=0.0, description="voice minutes + messages")
 
 
-@strawberry.type
+@strawberry.type(description="A user and how long they spent in one voice state.")
 class TopVoiceStateUserType:
-    """User ranked by total hours in a specific voice state."""
     state_type: VoiceStateTypeEnum
-    user_id: str
-    name: str
+    user_id: str = strawberry.field(description="Discord user ID.")
+    name: str = strawberry.field(description="Current display name.")
     hours: float
 
 
-@strawberry.type
+@strawberry.type(
+    description="Two users and how long they were in the same voice channel at the same time."
+)
 class VoiceConnectionType:
-    """A pair of users ranked by shared voice channel time."""
     user1_id: str
     user1_name: str
     user2_id: str
     user2_name: str
-    shared_hours: float
-    session_count: int
+    shared_hours: float = strawberry.field(description="Hours both were in the same channel.")
+    session_count: int = strawberry.field(
+        description="Number of times they were in a channel together."
+    )

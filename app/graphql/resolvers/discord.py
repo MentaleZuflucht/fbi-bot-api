@@ -6,11 +6,12 @@ and other Discord-related information with proper authentication.
 """
 
 import logging
-from typing import Optional, List
+from typing import Annotated, Optional, List
 from collections import defaultdict
 import strawberry
 from sqlmodel import select, func, and_, or_
 from sqlalchemy.orm import aliased
+from app.graphql.arguments import Limit, Offset, UserId, ChannelId, Days, StartDate, EndDate
 from app.graphql.context import GraphQLContext
 from app.graphql.types.discord import (
     UserType, MessageActivityType, VoiceSessionType, ActivityLogType,
@@ -32,13 +33,12 @@ logger = logging.getLogger(__name__)
 class Query:
     """GraphQL queries for Discord data."""
 
-    @strawberry.field
+    @strawberry.field(description="One Discord user by ID, or null if the bot has never seen them.")
     def user(
         self,
         info: strawberry.Info[GraphQLContext, None],
-        user_id: str
+        user_id: Annotated[str, strawberry.argument(description="Discord user ID.")]
     ) -> Optional[UserType]:
-        """Get a specific Discord user by ID."""
         if not info.context.is_authenticated:
             logger.warning("Unauthenticated GraphQL user query attempt")
             raise Exception("Authentication required")
@@ -60,15 +60,16 @@ class Query:
             logger.error(f"Error in GraphQL user query: {e}", exc_info=True)
             raise
 
-    @strawberry.field
+    @strawberry.field(description="All users the bot has seen, sorted by name.")
     def users(
         self,
         info: strawberry.Info[GraphQLContext, None],
-        limit: int = 50,
-        offset: int = 0,
-        search: Optional[str] = None
+        limit: Limit = 50,
+        offset: Offset = 0,
+        search: Annotated[Optional[str], strawberry.argument(
+            description="Part of a username, display name or global name (case-insensitive)."
+        )] = None
     ) -> List[UserType]:
-        """Get a list of Discord users sorted by display name."""
         if not info.context.is_authenticated:
             raise Exception("Authentication required")
 
@@ -108,20 +109,24 @@ class Query:
 
         return [UserType.from_model(user) for user in users]
 
-    @strawberry.field
+    @strawberry.field(description=(
+        "Sent messages, newest first. The bot never stores message content, "
+        "only details like type, length and whether it had attachments."
+    ))
     def messages(
         self,
         info: strawberry.Info[GraphQLContext, None],
-        limit: int = 50,
-        offset: int = 0,
-        user_id: Optional[str] = None,
-        channel_id: Optional[str] = None,
-        message_type: Optional[MessageTypeEnum] = None,
-        days: Optional[int] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        limit: Limit = 50,
+        offset: Offset = 0,
+        user_id: UserId = None,
+        channel_id: ChannelId = None,
+        message_type: Annotated[Optional[MessageTypeEnum], strawberry.argument(
+            description="Only messages of this type."
+        )] = None,
+        days: Days = None,
+        start_date: StartDate = None,
+        end_date: EndDate = None,
     ) -> List[MessageActivityType]:
-        """Get messages with optional filtering."""
         if not info.context.is_authenticated:
             raise Exception("Authentication required")
 
@@ -148,20 +153,24 @@ class Query:
 
         return [MessageActivityType.from_model(msg) for msg in messages]
 
-    @strawberry.field
+    @strawberry.field(description=(
+        "Voice channel visits (from joining to leaving a channel), newest first. "
+        "Dates filter on when the user joined."
+    ))
     def voice_sessions(
         self,
         info: strawberry.Info[GraphQLContext, None],
-        limit: int = 50,
-        offset: int = 0,
-        user_id: Optional[str] = None,
-        channel_id: Optional[str] = None,
-        days: Optional[int] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
-        ongoing_only: bool = False
+        limit: Limit = 50,
+        offset: Offset = 0,
+        user_id: UserId = None,
+        channel_id: ChannelId = None,
+        days: Days = None,
+        start_date: StartDate = None,
+        end_date: EndDate = None,
+        ongoing_only: Annotated[bool, strawberry.argument(
+            description="Only sessions of users who are in voice right now."
+        )] = False
     ) -> List[VoiceSessionType]:
-        """Get voice sessions with optional filtering."""
         if not info.context.is_authenticated:
             raise Exception("Authentication required")
 
@@ -188,21 +197,29 @@ class Query:
 
         return [VoiceSessionType.from_model(session) for session in sessions]
 
-    @strawberry.field
+    @strawberry.field(description=(
+        "Discord activities (playing a game, listening to Spotify, streaming, ...), newest first. "
+        "Dates filter on when the activity started."
+    ))
     def activities(
         self,
         info: strawberry.Info[GraphQLContext, None],
-        limit: int = 50,
-        offset: int = 0,
-        user_id: Optional[str] = None,
-        activity_type: Optional[ActivityTypeEnum] = None,
-        activity_name: Optional[str] = None,
-        days: Optional[int] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
-        ongoing_only: bool = False
+        limit: Limit = 50,
+        offset: Offset = 0,
+        user_id: UserId = None,
+        activity_type: Annotated[Optional[ActivityTypeEnum], strawberry.argument(
+            description="Only activities of this type."
+        )] = None,
+        activity_name: Annotated[Optional[str], strawberry.argument(
+            description='Part of the activity name (case-insensitive), e.g. "minecraft".'
+        )] = None,
+        days: Days = None,
+        start_date: StartDate = None,
+        end_date: EndDate = None,
+        ongoing_only: Annotated[bool, strawberry.argument(
+            description="Only activities that are still going on."
+        )] = False
     ) -> List[ActivityLogType]:
-        """Get activities with optional filtering."""
         if not info.context.is_authenticated:
             raise Exception("Authentication required")
 
@@ -231,20 +248,26 @@ class Query:
 
         return [ActivityLogType.from_model(activity) for activity in activities]
 
-    @strawberry.field
+    @strawberry.field(description=(
+        "Online status history (online, idle, do not disturb, offline), newest first. "
+        "Each entry lasts from setAt until changedAt."
+    ))
     def presence_status(
         self,
         info: strawberry.Info[GraphQLContext, None],
-        limit: int = 50,
-        offset: int = 0,
-        user_id: Optional[str] = None,
-        status_type: Optional[DiscordStatusEnum] = None,
-        days: Optional[int] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
-        current_only: bool = False
+        limit: Limit = 50,
+        offset: Offset = 0,
+        user_id: UserId = None,
+        status_type: Annotated[Optional[DiscordStatusEnum], strawberry.argument(
+            description="Only this status."
+        )] = None,
+        days: Days = None,
+        start_date: StartDate = None,
+        end_date: EndDate = None,
+        current_only: Annotated[bool, strawberry.argument(
+            description="Only the status each user has right now."
+        )] = False
     ) -> List[PresenceStatusLogType]:
-        """Get presence status logs with optional filtering."""
         if not info.context.is_authenticated:
             raise Exception("Authentication required")
 
@@ -271,20 +294,25 @@ class Query:
 
         return [PresenceStatusLogType.from_model(status) for status in statuses]
 
-    @strawberry.field
+    @strawberry.field(
+        description="Custom statuses (the text and emoji shown under a name), newest first."
+    )
     def custom_statuses(
         self,
         info: strawberry.Info[GraphQLContext, None],
-        limit: int = 50,
-        offset: int = 0,
-        user_id: Optional[str] = None,
-        has_text: Optional[bool] = None,
-        has_emoji: Optional[bool] = None,
-        days: Optional[int] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        limit: Limit = 50,
+        offset: Offset = 0,
+        user_id: UserId = None,
+        has_text: Annotated[Optional[bool], strawberry.argument(
+            description="true: only statuses with text. false: only statuses without text."
+        )] = None,
+        has_emoji: Annotated[Optional[bool], strawberry.argument(
+            description="true: only statuses with an emoji. false: only statuses without one."
+        )] = None,
+        days: Days = None,
+        start_date: StartDate = None,
+        end_date: EndDate = None,
     ) -> List[CustomStatusType]:
-        """Get custom statuses with optional filtering."""
         if not info.context.is_authenticated:
             raise Exception("Authentication required")
 
@@ -317,17 +345,16 @@ class Query:
 
         return [CustomStatusType.from_model(status) for status in statuses]
 
-    @strawberry.field
+    @strawberry.field(description="Text channels ranked by number of messages.")
     def channel_stats(
         self,
         info: strawberry.Info[GraphQLContext, None],
-        channel_id: Optional[str] = None,
-        limit: int = 10,
-        days: Optional[int] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        channel_id: ChannelId = None,
+        limit: Limit = 10,
+        days: Days = None,
+        start_date: StartDate = None,
+        end_date: EndDate = None,
     ) -> List[ChannelStatsType]:
-        """Get channel statistics."""
         if not info.context.is_authenticated:
             raise Exception("Authentication required")
 
@@ -379,15 +406,14 @@ class Query:
 
         return channel_stats
 
-    @strawberry.field
+    @strawberry.field(description="Totals for the whole server.")
     def server_stats(
         self,
         info: strawberry.Info[GraphQLContext, None],
-        days: Optional[int] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        days: Days = None,
+        start_date: StartDate = None,
+        end_date: EndDate = None,
     ) -> ServerStatsType:
-        """Get overall server statistics."""
         if not info.context.is_authenticated:
             raise Exception("Authentication required")
 
@@ -470,16 +496,18 @@ class Query:
             most_common_activity=most_common_activity
         )
 
-    @strawberry.field
+    @strawberry.field(description=(
+        "Activity per day, oldest first, for charts. Days without any activity are left out. "
+        "Note: days defaults to 30 here, pass days: null to get everything."
+    ))
     def daily_stats(
         self,
         info: strawberry.Info[GraphQLContext, None],
-        days: Optional[int] = 30,
-        user_id: Optional[str] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        days: Days = 30,
+        user_id: UserId = None,
+        start_date: StartDate = None,
+        end_date: EndDate = None,
     ) -> List[DailyStatsType]:
-        """Per-day message count, voice hours, activity count, and active users."""
         if not info.context.is_authenticated:
             raise Exception("Authentication required")
 
@@ -543,16 +571,17 @@ class Query:
             for d in all_dates
         ]
 
-    @strawberry.field
+    @strawberry.field(
+        description="Number of messages per hour of the day. Always 24 entries, hour 0 to 23 (UTC)."
+    )
     def hourly_message_distribution(
         self,
         info: strawberry.Info[GraphQLContext, None],
-        days: Optional[int] = None,
-        user_id: Optional[str] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        days: Days = None,
+        user_id: UserId = None,
+        start_date: StartDate = None,
+        end_date: EndDate = None,
     ) -> List[HourlyDistributionType]:
-        """Message count by hour-of-day (0-23)."""
         if not info.context.is_authenticated:
             raise Exception("Authentication required")
 
@@ -569,17 +598,19 @@ class Query:
         rows = {int(r.h): r.cnt for r in info.context.discord_db.exec(q.group_by("h"))}
         return [HourlyDistributionType(hour=h, count=rows.get(h, 0)) for h in range(24)]
 
-    @strawberry.field
+    @strawberry.field(description=(
+        "Voice channels ranked by total hours spent in them. "
+        "name is the channel ID, count the number of visits. Only finished visits count."
+    ))
     def top_channels(
         self,
         info: strawberry.Info[GraphQLContext, None],
-        days: Optional[int] = None,
-        limit: int = 10,
-        user_id: Optional[str] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        days: Days = None,
+        limit: Limit = 10,
+        user_id: UserId = None,
+        start_date: StartDate = None,
+        end_date: EndDate = None,
     ) -> List[TopItemType]:
-        """Top channels ranked by total voice hours spent."""
         if not info.context.is_authenticated:
             raise Exception("Authentication required")
 
@@ -616,17 +647,19 @@ class Query:
             for r in rows
         ]
 
-    @strawberry.field
+    @strawberry.field(description=(
+        "Activities ranked by total hours. "
+        "name is the activity name, count how often it was started. Only finished activities count."
+    ))
     def top_activities(
         self,
         info: strawberry.Info[GraphQLContext, None],
-        days: Optional[int] = None,
-        limit: int = 10,
-        user_id: Optional[str] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        days: Days = None,
+        limit: Limit = 10,
+        user_id: UserId = None,
+        start_date: StartDate = None,
+        end_date: EndDate = None,
     ) -> List[TopItemType]:
-        """Top activities ranked by total hours spent."""
         if not info.context.is_authenticated:
             raise Exception("Authentication required")
 
@@ -663,16 +696,18 @@ class Query:
             for r in rows
         ]
 
-    @strawberry.field
+    @strawberry.field(description=(
+        "Most active users, ranked by score = voice minutes + messages "
+        "(one minute in voice counts as much as one message)."
+    ))
     def top_users(
         self,
         info: strawberry.Info[GraphQLContext, None],
-        days: Optional[int] = None,
-        limit: int = 10,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        days: Days = None,
+        limit: Limit = 10,
+        start_date: StartDate = None,
+        end_date: EndDate = None,
     ) -> List[TopUserType]:
-        """Top users ranked by composite score (voice hours * 60 + messages)."""
         if not info.context.is_authenticated:
             raise Exception("Authentication required")
 
@@ -734,17 +769,21 @@ class Query:
             for uid, msgs, hours, score in scored
         ]
 
-    @strawberry.field
+    @strawberry.field(description=(
+        "For each voice state (muted, deafened, streaming, camera on, ...), the users who spent "
+        "the most time in it. limit applies to each state separately."
+    ))
     def top_voice_state_users(
         self,
         info: strawberry.Info[GraphQLContext, None],
-        days: Optional[int] = None,
-        limit: int = 5,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
-        state_type: Optional[VoiceStateTypeEnum] = None,
+        days: Days = None,
+        limit: Limit = 5,
+        start_date: StartDate = None,
+        end_date: EndDate = None,
+        state_type: Annotated[Optional[VoiceStateTypeEnum], strawberry.argument(
+            description="Only this voice state."
+        )] = None,
     ) -> List[TopVoiceStateUserType]:
-        """Top users by total hours in each voice state (muted, deaf, streaming, etc.)."""
         if not info.context.is_authenticated:
             raise Exception("Authentication required")
 
@@ -806,17 +845,21 @@ class Query:
 
         return results
 
-    @strawberry.field
+    @strawberry.field(description=(
+        '"Voice dating": pairs of users ranked by how long they were in the same voice channel '
+        "at the same time. Only finished sessions count."
+    ))
     def voice_connections(
         self,
         info: strawberry.Info[GraphQLContext, None],
-        limit: int = 20,
-        user_id: Optional[str] = None,
-        days: Optional[int] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        limit: Limit = 20,
+        user_id: Annotated[Optional[str], strawberry.argument(
+            description="Only pairs that include this Discord user ID."
+        )] = None,
+        days: Days = None,
+        start_date: StartDate = None,
+        end_date: EndDate = None,
     ) -> List[VoiceConnectionType]:
-        """Top user pairs ranked by shared voice channel time (overlapping sessions)."""
         if not info.context.is_authenticated:
             raise Exception("Authentication required")
 
@@ -894,14 +937,18 @@ class Query:
             for r in rows
         ]
 
-    @strawberry.field
+    @strawberry.field(description=(
+        "Search users by username, display name or global name (case-insensitive), "
+        "newest members first. Like users(search: ...), but sorted by first seen."
+    ))
     def search_users(
         self,
         info: strawberry.Info[GraphQLContext, None],
-        query: str,
-        limit: int = 20
+        query: Annotated[str, strawberry.argument(
+            description="Part of the name, at least 2 characters."
+        )],
+        limit: Limit = 20
     ) -> List[UserType]:
-        """Search users by username, display name, or global name."""
         if not info.context.is_authenticated:
             raise Exception("Authentication required")
 

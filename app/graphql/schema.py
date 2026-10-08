@@ -8,9 +8,10 @@ and sets up the FastAPI GraphQL endpoint with authentication.
 import logging
 import strawberry
 from strawberry.fastapi import GraphQLRouter
-from typing import List
+from typing import Annotated, List
 from datetime import datetime, timedelta
 from sqlmodel import select, func
+from app.graphql.arguments import Limit
 from app.graphql.context import (
     get_graphql_context, GraphQLContext, DBSessionCleanupExtension, LimitCapExtension
 )
@@ -33,18 +34,20 @@ from app.auth.services import AuthService
 logger = logging.getLogger(__name__)
 
 
-@strawberry.type
+@strawberry.type(description="""Discord server activity collected by the FBI Bot.
+
+Every request needs your API key as a header: `{"Authorization": "Bearer sk_live_..."}` \
+(in GraphiQL: the Headers tab below the query editor). Try `hello` to check that your key works.
+
+- IDs are strings, because Discord IDs are too big for GraphQL's Int.
+- All times are UTC.
+- Durations in hours are rounded to 2 decimals.
+- Date filters: use `days` for "the last N days", or `startDate`/`endDate` for a fixed range.""")
 class Query(DiscordQuery):
-    """
-    Main GraphQL Query type.
-
-    Combines all query resolvers from different modules.
-    All queries require authentication via Bearer token.
-    """
-
-    @strawberry.field
+    @strawberry.field(
+        description="Says hello with the name of your API key. Handy to check that your key works."
+    )
     def hello(self, info: strawberry.Info[GraphQLContext, None]) -> str:
-        """Simple hello query for testing."""
         if not info.context.is_authenticated:
             logger.debug("Unauthenticated hello query")
             return "Hello! Please authenticate to access Discord data."
@@ -54,12 +57,11 @@ class Query(DiscordQuery):
         return f"Hello {user_name}! You have access to the Discord data API."
 
     # Auth-related queries (admin only)
-    @strawberry.field
+    @strawberry.field(description="All API keys, newest first. Admin only.")
     def api_keys(
         self,
         info: strawberry.Info[GraphQLContext, None]
     ) -> List[ApiKeyType]:
-        """Get all API keys (admin only)."""
         if not info.context.is_admin:
             raise Exception("Admin access required")
 
@@ -69,13 +71,12 @@ class Query(DiscordQuery):
 
         return [ApiKeyType.from_model(key) for key in keys]
 
-    @strawberry.field
+    @strawberry.field(description="One API key by its ID. Admin only.")
     def api_key(
         self,
         info: strawberry.Info[GraphQLContext, None],
         key_id: int
     ) -> ApiKeyType:
-        """Get a specific API key by ID (admin only)."""
         if not info.context.is_admin:
             raise Exception("Admin access required")
 
@@ -88,14 +89,13 @@ class Query(DiscordQuery):
 
         return ApiKeyType.from_model(key)
 
-    @strawberry.field
+    @strawberry.field(description="API request log, newest first. Admin only.")
     def api_usage(
         self,
         info: strawberry.Info[GraphQLContext, None],
-        limit: int = 100,
-        days: int = 7
+        limit: Limit = 100,
+        days: Annotated[int, strawberry.argument(description="Look back this many days.")] = 7
     ) -> List[ApiUsageType]:
-        """Get API usage logs (admin only)."""
         if not info.context.is_admin:
             raise Exception("Admin access required")
 
@@ -114,12 +114,11 @@ class Query(DiscordQuery):
             for usage, api_key_name in usage_logs
         ]
 
-    @strawberry.field
+    @strawberry.field(description="Number of API keys and requests today. Admin only.")
     def auth_stats(
         self,
         info: strawberry.Info[GraphQLContext, None]
     ) -> AuthStatsType:
-        """Get authentication statistics (admin only)."""
         if not info.context.is_admin:
             raise Exception("Admin access required")
 
@@ -149,25 +148,28 @@ class Query(DiscordQuery):
             total_requests_today=requests_today
         )
 
-    @strawberry.field
+    @strawberry.field(description="The API key you are using.")
     def me(self, info: strawberry.Info[GraphQLContext, None]) -> ApiKeyType:
-        """Get information about the current API key."""
         if not info.context.is_authenticated:
             raise Exception("Authentication required")
 
         return ApiKeyType.from_model(info.context.api_key)
 
 
-@strawberry.type
+@strawberry.type(description="Managing API keys. Admin only.")
 class Mutation:
-    @strawberry.mutation
+    @strawberry.mutation(description=(
+        "Create an API key, e.g. for a friend. "
+        "The full key is only shown here, once, so save it. Admin only."
+    ))
     async def create_api_key(
         self,
         info: strawberry.Info[GraphQLContext, None],
-        name: str,
-        role: UserRoleType = UserRoleType.READ
+        name: Annotated[str, strawberry.argument(description='Who the key is for, e.g. "Alice".')],
+        role: Annotated[UserRoleType, strawberry.argument(
+            description="READ can query data, ADMIN can also manage keys."
+        )] = UserRoleType.READ
     ) -> CreateApiKeyResult:
-        """Create a new API key (admin only). The full key is returned once — save it."""
         if not info.context.is_admin:
             raise Exception("Admin access required")
 
@@ -188,13 +190,14 @@ class Mutation:
             api_key=plain_key
         )
 
-    @strawberry.mutation
+    @strawberry.mutation(
+        description="Delete an API key for good. You can't delete your own key. Admin only."
+    )
     async def revoke_api_key(
         self,
         info: strawberry.Info[GraphQLContext, None],
         key_id: int
     ) -> bool:
-        """Permanently delete an API key (admin only). Cannot revoke your own key."""
         if not info.context.is_admin:
             raise Exception("Admin access required")
 

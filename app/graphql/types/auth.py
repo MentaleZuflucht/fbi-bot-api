@@ -5,7 +5,7 @@ These types expose the auth database for admin operations like
 API key administration and usage tracking.
 """
 
-from typing import Optional
+from typing import Annotated, Optional
 from datetime import datetime
 from enum import Enum
 import strawberry
@@ -14,30 +14,27 @@ from app.graphql.context import GraphQLContext
 from app.auth.models import ApiKey, ApiUsage
 
 
-@strawberry.enum
+@strawberry.enum(description="What an API key may do.")
 class UserRoleType(Enum):
-    """GraphQL enum for API key roles."""
-    ADMIN = "admin"
-    READ = "read"
+    ADMIN = strawberry.enum_value("admin", description="Query data and manage API keys")
+    READ = strawberry.enum_value("read", description="Query data")
 
 
-@strawberry.type
+@strawberry.type(description="An API key. The full key is never shown again after creating it.")
 class ApiKeyType:
-    """GraphQL type for API keys."""
     id: int
-    name: str
-    key_prefix: str  # Only show prefix, never full key
+    name: str = strawberry.field(description="Who the key is for.")
+    key_prefix: str = strawberry.field(description="Start of the key, to recognize it.")
     role: UserRoleType
     created_at: datetime
     last_used_at: Optional[datetime]
 
-    @strawberry.field
+    @strawberry.field(description="Request statistics of this key. Admin only.")
     def usage_stats(
         self,
         info: strawberry.Info[GraphQLContext, None],
-        days: int = 7
+        days: Annotated[int, strawberry.argument(description="Look back this many days.")] = 7
     ) -> "ApiKeyUsageStatsType":
-        """Get usage statistics for this API key."""
         if not info.context.is_admin:
             raise Exception("Admin access required")
 
@@ -78,23 +75,25 @@ class ApiKeyType:
         )
 
 
-@strawberry.type
+@strawberry.type(description="Request statistics of one API key.")
 class ApiKeyUsageStatsType:
-    """Statistics for API key usage."""
     total_requests: int
-    error_count: int
-    success_rate: float
+    error_count: int = strawberry.field(
+        description="Requests that failed (HTTP status 400 or higher)."
+    )
+    success_rate: float = strawberry.field(description="Percentage of successful requests, 0-100.")
 
 
-@strawberry.type
+@strawberry.type(description="One logged API request.")
 class ApiUsageType:
-    """GraphQL type for API usage logs."""
     id: int
     timestamp: datetime
     endpoint: str
-    method: str
-    response_status: Optional[int]
-    api_key_name: str  # From the related API key
+    method: str = strawberry.field(description="HTTP method, e.g. POST.")
+    response_status: Optional[int] = strawberry.field(
+        description="HTTP status code of the response."
+    )
+    api_key_name: str = strawberry.field(description="Name of the API key that made the request.")
 
     @classmethod
     def from_model(cls, usage: ApiUsage, api_key_name: str) -> "ApiUsageType":
@@ -109,21 +108,21 @@ class ApiUsageType:
         )
 
 
-@strawberry.type
+@strawberry.type(description="Overview of API keys and requests.")
 class AuthStatsType:
-    """Overall authentication statistics."""
     total_api_keys: int
     admin_keys: int
     read_keys: int
-    total_requests_today: int
+    total_requests_today: int = strawberry.field(description="Requests since midnight UTC.")
 
 
-@strawberry.type
+@strawberry.type(description="A newly created API key.")
 class CreateApiKeyResult:
-    """Result of createApiKey — includes the plaintext key shown exactly once."""
     id: int
     name: str
     key_prefix: str
     role: UserRoleType
     created_at: datetime
-    api_key: str  # Full plaintext key — only available at creation time
+    api_key: str = strawberry.field(
+        description="The full key. It is only shown this once, so save it now."
+    )
