@@ -20,6 +20,7 @@ class MessageType(str, Enum):
     GUILD_BOOST_TIER_2 = "guild_boost_tier_2"
     GUILD_BOOST_TIER_3 = "guild_boost_tier_3"
     CHANNEL_FOLLOW_ADD = "channel_follow_add"
+    GUILD_STREAM = "guild_stream"
     GUILD_DISCOVERY_DISQUALIFIED = "guild_discovery_disqualified"
     GUILD_DISCOVERY_REQUALIFIED = "guild_discovery_requalified"
     GUILD_DISCOVERY_GRACE_PERIOD_INITIAL_WARNING = "guild_discovery_grace_period_initial_warning"
@@ -30,6 +31,7 @@ class MessageType(str, Enum):
     THREAD_STARTER_MESSAGE = "thread_starter_message"
     GUILD_INVITE_REMINDER = "guild_invite_reminder"
     CONTEXT_MENU_COMMAND = "context_menu_command"
+    AUTO_MODERATION_ACTION = "auto_moderation_action"
     ROLE_SUBSCRIPTION_PURCHASE = "role_subscription_purchase"
     INTERACTION_PREMIUM_UPSELL = "interaction_premium_upsell"
     STAGE_START = "stage_start"
@@ -44,6 +46,7 @@ class MessageType(str, Enum):
     GUILD_INCIDENT_REPORT_FALSE_ALARM = "guild_incident_report_false_alarm"
     PURCHASE_NOTIFICATION = "purchase_notification"
     POLL_RESULT = "poll_result"
+    EMOJI_ADDED = "emoji_added"
 
 
 class DiscordStatus(str, Enum):
@@ -107,6 +110,45 @@ class User(SQLModel, table=True):
     name_history: List["UserNameHistory"] = Relationship(back_populates="user")
 
 
+class Channel(SQLModel, table=True):
+    """
+    Discord channels, so the channel IDs in the other tables can be shown with a name.
+
+    The other tables don't reference this one with foreign keys, since older rows
+    contain IDs of channels the bot never saw.
+
+    Attributes:
+        channel_id: Discord channel ID (snowflake) - primary key
+        name: Current channel name
+        channel_type: Discord channel type, e.g. text, voice, stage_voice, category, public_thread
+        parent_id: Category of a channel, or the channel a thread belongs to
+        deleted_at: When the channel was deleted (NULL if it still exists)
+    """
+    __tablename__ = "channels"
+
+    channel_id: int = Field(
+        primary_key=True,
+        sa_type=BigInteger,
+        sa_column_kwargs={"autoincrement": False},  # Discord's IDs, no sequence needed
+        description="Discord channel ID (snowflake)"
+    )
+    name: str = Field(max_length=100, description="Current channel name")
+    channel_type: str = Field(
+        max_length=32,
+        description="Discord channel type, e.g. text, voice, stage_voice, category, public_thread"
+    )
+    parent_id: Optional[int] = Field(
+        default=None,
+        sa_type=BigInteger,
+        description="Category of a channel, or the channel a thread belongs to"
+    )
+    deleted_at: Optional[datetime] = Field(
+        sa_type=DateTime(timezone=True),
+        default=None,
+        description="When the channel was deleted (NULL if it still exists)"
+    )
+
+
 class MessageActivity(SQLModel, table=True):
     """
     Tracks when users send messages in channels.
@@ -127,21 +169,6 @@ class MessageActivity(SQLModel, table=True):
     __tablename__ = "message_activity"
     __table_args__ = (
         Index('idx_message_activity_user_sent', 'user_id', 'sent_at'),
-        CheckConstraint(
-            "message_type IN ('DEFAULT', 'RECIPIENT_ADD', 'RECIPIENT_REMOVE', 'CALL', "
-            "'CHANNEL_NAME_CHANGE', 'CHANNEL_ICON_CHANGE', 'CHANNEL_PINNED_MESSAGE', 'USER_JOIN', "
-            "'GUILD_BOOST', 'GUILD_BOOST_TIER_1', 'GUILD_BOOST_TIER_2', 'GUILD_BOOST_TIER_3', "
-            "'CHANNEL_FOLLOW_ADD', 'GUILD_DISCOVERY_DISQUALIFIED', 'GUILD_DISCOVERY_REQUALIFIED', "
-            "'GUILD_DISCOVERY_GRACE_PERIOD_INITIAL_WARNING', 'GUILD_DISCOVERY_GRACE_PERIOD_FINAL_WARNING', "
-            "'THREAD_CREATED', 'REPLY', 'CHAT_INPUT_COMMAND', 'THREAD_STARTER_MESSAGE', "
-            "'GUILD_INVITE_REMINDER', 'CONTEXT_MENU_COMMAND', 'ROLE_SUBSCRIPTION_PURCHASE', "
-            "'INTERACTION_PREMIUM_UPSELL', 'STAGE_START', 'STAGE_END', 'STAGE_SPEAKER', "
-            "'STAGE_RAISE_HAND', 'STAGE_TOPIC', 'GUILD_APPLICATION_PREMIUM_SUBSCRIPTION', "
-            "'GUILD_INCIDENT_ALERT_MODE_ENABLED', 'GUILD_INCIDENT_ALERT_MODE_DISABLED', "
-            "'GUILD_INCIDENT_REPORT_RAID', 'GUILD_INCIDENT_REPORT_FALSE_ALARM', "
-            "'PURCHASE_NOTIFICATION', 'POLL_RESULT')",
-            name='ck_message_type_valid'
-        ),
     )
 
     message_id: int = Field(
@@ -291,14 +318,14 @@ class PresenceStatusLog(SQLModel, table=True):
     Tracks user presence status periods with explicit start/end times.
 
     Records when users enter and exit specific presence states (online, idle, dnd, offline).
-    Duration can be calculated directly from set_at and changed_at timestamps.
+    Duration can be calculated directly from set_at and cleared_at timestamps.
 
     Attributes:
         id: Auto-incrementing primary key
         user_id: Discord user ID whose status changed
         status_type: The Discord presence status
         set_at: When this status became active
-        changed_at: When this status ended (NULL if still active)
+        cleared_at: When this status ended (NULL if still active)
     """
     __tablename__ = "presence_status_log"
     __table_args__ = (

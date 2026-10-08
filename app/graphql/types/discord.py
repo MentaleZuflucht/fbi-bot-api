@@ -56,6 +56,7 @@ class MessageTypeEnum(Enum):
     GUILD_BOOST_TIER_2 = "guild_boost_tier_2"
     GUILD_BOOST_TIER_3 = "guild_boost_tier_3"
     CHANNEL_FOLLOW_ADD = "channel_follow_add"
+    GUILD_STREAM = "guild_stream"
     GUILD_DISCOVERY_DISQUALIFIED = "guild_discovery_disqualified"
     GUILD_DISCOVERY_REQUALIFIED = "guild_discovery_requalified"
     GUILD_DISCOVERY_GRACE_PERIOD_INITIAL_WARNING = "guild_discovery_grace_period_initial_warning"
@@ -66,6 +67,7 @@ class MessageTypeEnum(Enum):
     THREAD_STARTER_MESSAGE = "thread_starter_message"
     GUILD_INVITE_REMINDER = "guild_invite_reminder"
     CONTEXT_MENU_COMMAND = "context_menu_command"
+    AUTO_MODERATION_ACTION = "auto_moderation_action"
     ROLE_SUBSCRIPTION_PURCHASE = "role_subscription_purchase"
     INTERACTION_PREMIUM_UPSELL = "interaction_premium_upsell"
     STAGE_START = "stage_start"
@@ -80,6 +82,7 @@ class MessageTypeEnum(Enum):
     GUILD_INCIDENT_REPORT_FALSE_ALARM = "guild_incident_report_false_alarm"
     PURCHASE_NOTIFICATION = "purchase_notification"
     POLL_RESULT = "poll_result"
+    EMOJI_ADDED = "emoji_added"
 
 
 @strawberry.enum(
