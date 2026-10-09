@@ -30,7 +30,7 @@ query Me {
 
 # ── 3. USERS ─────────────────────────────────────────────────
 
-# List the 10 most recently seen users
+# List the first 10 users, sorted by name
 query ListUsers {
   users(limit: 10, offset: 0) {
     userId
@@ -69,6 +69,7 @@ query GetUser {
       mostActiveHour
       favoriteActivity
       mostUsedChannel
+      mostUsedChannelName
     }
   }
 }
@@ -91,11 +92,10 @@ query UserStats30Days {
   }
 }
 
-# Search users by name (min 2 characters)
-query SearchUsers {
-  searchUsers(query: "some", limit: 10) {
+# Search users by username, display name or global name
+query ListUsersSearch {
+  users(limit: 20, search: "some") {
     userId
-    firstSeen
     currentName {
       username
       displayName
@@ -103,13 +103,14 @@ query SearchUsers {
   }
 }
 
-# List users with a name search filter
-query ListUsersSearch {
-  users(limit: 20, search: "some") {
+# Every activity a user has done, with total hours
+query UserUniqueActivities {
+  user(userId: "USER_ID") {
     userId
-    currentName {
-      username
-      displayName
+    uniqueActivities(days: 30) {
+      activityName
+      totalHours
+      count
     }
   }
 }
@@ -123,6 +124,7 @@ query LatestMessages {
     messageId
     userId
     channelId
+    channelName
     messageType
     hasAttachments
     hasEmbeds
@@ -186,6 +188,7 @@ query LatestVoiceSessions {
     id
     userId
     channelId
+    channelName
     joinedAt
     leftAt
     durationMinutes
@@ -404,7 +407,30 @@ query UserCustomStatuses {
 }
 
 
-# ── 9. STATISTICS ─────────────────────────────────────────────
+# ── 9. CHANNELS ──────────────────────────────────────────────
+
+# All channels and threads the bot has seen
+query Channels {
+  channels {
+    channelId
+    name
+    channelType
+    parentId
+    deletedAt
+  }
+}
+
+# Including deleted channels
+query ChannelsWithDeleted {
+  channels(includeDeleted: true) {
+    channelId
+    name
+    deletedAt
+  }
+}
+
+
+# ── 10. STATISTICS ────────────────────────────────────────────
 
 # Overall server stats (all time)
 query ServerStats {
@@ -414,7 +440,18 @@ query ServerStats {
     totalVoiceTimeHours
     totalActivities
     mostActiveChannelId
+    mostActiveChannelName
     mostCommonActivity
+  }
+}
+
+# Server stats for a fixed date range (both days included)
+query ServerStatsDateRange {
+  serverStats(startDate: "2026-01-01", endDate: "2026-01-31") {
+    totalUsers
+    totalMessages
+    totalVoiceTimeHours
+    totalActivities
   }
 }
 
@@ -430,10 +467,11 @@ query ServerStats30Days {
   }
 }
 
-# Top 10 most active channels
-query TopChannels {
+# Top 10 text channels by number of messages
+query ChannelStatsTop10 {
   channelStats(limit: 10) {
     channelId
+    channelName
     totalMessages
     uniqueUsers
     mostActiveUserId
@@ -460,8 +498,108 @@ query SingleChannelStats {
   }
 }
 
+# Channels a specific user writes in the most
+query UserChannelStats {
+  channelStats(userId: "USER_ID", limit: 5) {
+    channelId
+    channelName
+    totalMessages
+  }
+}
 
-# ── 10. ADMIN QUERIES (admin key required) ───────────────────
+# Activity per day for the last 30 days (the default), for charts
+query DailyStats {
+  dailyStats {
+    date
+    messageCount
+    voiceHours
+    activityCount
+    activeUsers
+  }
+}
+
+# Messages per hour of the day (UTC) for a specific user
+query HourlyMessageDistribution {
+  hourlyMessageDistribution(userId: "USER_ID", days: 30) {
+    hour
+    count
+  }
+}
+
+
+# ── 11. RANKINGS ─────────────────────────────────────────────
+
+# Most active users (score = voice minutes + messages)
+query TopUsers {
+  topUsers(days: 30, limit: 10) {
+    userId
+    name
+    messageCount
+    voiceHours
+    score
+  }
+}
+
+# Voice channels with the most hours
+query TopChannels {
+  topChannels(days: 30, limit: 10) {
+    name
+    count
+    hours
+  }
+}
+
+# Activities with the most hours
+query TopActivities {
+  topActivities(days: 30, limit: 10) {
+    name
+    count
+    hours
+  }
+}
+
+# Top 3 users per voice state (muted, deafened, streaming, ...)
+query TopVoiceStateUsers {
+  topVoiceStateUsers(days: 30, limit: 3) {
+    stateType
+    userId
+    name
+    hours
+  }
+}
+
+# Only the users who were self-muted the longest
+query TopSelfMutedUsers {
+  topVoiceStateUsers(stateType: SELF_MUTE, limit: 10) {
+    userId
+    name
+    hours
+  }
+}
+
+# Pairs of users who spent the most time in voice together
+query VoiceConnections {
+  voiceConnections(days: 30, limit: 10) {
+    user1Name
+    user2Name
+    sharedHours
+    sessionCount
+  }
+}
+
+# Who a specific user spends the most voice time with
+query UserVoiceConnections {
+  voiceConnections(userId: "USER_ID", limit: 5) {
+    user1Id
+    user1Name
+    user2Id
+    user2Name
+    sharedHours
+  }
+}
+
+
+# ── 12. ADMIN QUERIES (admin key required) ───────────────────
 
 # Create a new API key — the full key is returned only once, save it!
 mutation CreateApiKey {
